@@ -2,6 +2,9 @@
 extends Area2D
 class_name BaseCard
 
+# Preload CJK font (applied to all labels at runtime)
+const CJK_FONT = preload("res://fonts/simhei.ttf")
+
 # ============================================================
 # Exported properties
 # ============================================================
@@ -90,7 +93,18 @@ var _drag_offset: Vector2 = Vector2.ZERO
 # ============================================================
 func _ready() -> void:
 	input_pickable = true
+	_apply_cjk_font_to_labels()
 	call_deferred("_initialize_starting_stack")
+
+func _apply_cjk_font_to_labels() -> void:
+	# Walk all children recursively and set the CJK font on every Label
+	_apply_font_recursive(self)
+
+func _apply_font_recursive(node: Node) -> void:
+	if node is Label:
+		node.add_theme_font_override("font", CJK_FONT)
+	for i in range(node.get_child_count()):
+		_apply_font_recursive(node.get_child(i))
 
 func _initialize_starting_stack() -> void:
 	if stack_parent == null:
