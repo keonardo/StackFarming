@@ -1,8 +1,8 @@
 [gd_scene load_steps=7 format=3]
 
-[ext_resource type="Script" path="res://Scripts/IrrigationManager.cs" id="1_irrmgr"]
-[ext_resource type="Script" path="res://Scripts/SolarTermEngine.cs" id="2_termeng"]
-[ext_resource type="Script" path="res://Scripts/CardSpawner.cs" id="3_spawner"]
+[ext_resource type="Script" path="res://Scripts/irrigation_manager.gd" id="1_irrmgr"]
+[ext_resource type="Script" path="res://Scripts/solar_term_engine.gd" id="2_termeng"]
+[ext_resource type="Script" path="res://Scripts/card_spawner.gd" id="3_spawner"]
 [ext_resource type="PackedScene" path="res://Scenes/container_card.tscn" id="4_container"]
 [ext_resource type="PackedScene" path="res://Scenes/creature_card.tscn" id="5_creature"]
 

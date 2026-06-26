@@ -7,65 +7,37 @@ on:
 
 env:
   GODOT_VERSION: "4.6.2"
-  PROJECT_NAME: "StackFarming"
 
 jobs:
   export-html5:
     name: HTML5 Export
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK 8.0
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq wget unzip git
+          sudo apt-get install -y -qq wget unzip
 
       - name: Download Godot ${{ env.GODOT_VERSION }}
         run: |
-          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip"
-          unzip -q Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
-          # Godot 4.x mono zips contain a directory with the binary + GodotSharp/ API assemblies
-          GODOT_DIR=$(find . -maxdepth 1 -type d -name "Godot_v*" | head -1)
-          if [ -n "$GODOT_DIR" ]; then
-            mv "$GODOT_DIR"/Godot_v* godot 2>/dev/null || mv "$GODOT_DIR"/Godot* godot
-            # Also copy GodotSharp API assemblies to project (needed for headless export)
-            if [ -d "$GODOT_DIR/GodotSharp" ]; then
-              cp -r "$GODOT_DIR/GodotSharp" ./
-              echo "Copied GodotSharp from Godot bundle"
-            fi
-            rm -rf "$GODOT_DIR"
-          else
-            # Binary extracted directly (no subdirectory)
-            mv Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64 godot
-          fi
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
           chmod +x godot
-          ls -la GodotSharp/Api/Debug/ 2>/dev/null || true
 
       - name: Download HTML5 export templates
         run: |
-          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz"
-          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
-          unzip -q Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
-          mv ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/ 2>/dev/null || true
-          rm -rf ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/templates 2>/dev/null || true
-          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/
-
-      - name: Restore NuGet packages
-        run: dotnet restore "${{ env.PROJECT_NAME }}.csproj"
-
-      - name: Build C# solution
-        run: |
-          dotnet build "${{ env.PROJECT_NAME }}.csproj" -c Release --no-restore
-          echo "C# build step completed"
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q Godot_v${GODOT_VERSION}-stable_export_templates.tpz -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mv ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/ 2>/dev/null || true
+          rm -rf ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/templates 2>/dev/null || true
+          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
 
       - name: Export HTML5
         run: |

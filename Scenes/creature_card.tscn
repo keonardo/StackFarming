@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://Scripts/CreatureCard.cs" id="1_creature"]
+[ext_resource type="Script" path="res://Scripts/creature_card.gd" id="1_creature"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_coll"]
 size = Vector2(80, 100)

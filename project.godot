@@ -16,15 +16,24 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="StackFarming"
 run/main_scene="res://main.tscn"
-config/features=PackedStringArray("4.6", "C#", "Forward Plus")
+config/features=PackedStringArray("4.6", "Forward Plus")
+
+[autoload]
+
+MCPGameBridge="res://addons/godot_mcp/game_bridge/mcp_game_bridge.gd"
 
 [display]
 
-window/size/viewport_width=1152
-window/size/viewport_height=648
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
-[dotnet]
+[editor_plugins]
 
-project/assembly_name="StackFarming"
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")
+
+[godot_mcp]
+
+bind_mode=0
+custom_bind_ip=""
+port_override_enabled=false
+port_override=6550

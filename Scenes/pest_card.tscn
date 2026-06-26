@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://Scripts/PestCard.cs" id="1_pest"]
+[ext_resource type="Script" path="res://Scripts/pest_card.gd" id="1_pest"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_coll"]
 size = Vector2(80, 100)
