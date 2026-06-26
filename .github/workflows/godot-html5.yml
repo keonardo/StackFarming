@@ -59,6 +59,20 @@ jobs:
           dotnet build "${{ env.PROJECT_NAME }}.csproj" -c Release --no-restore
           echo "C# build step completed"
 
+      - name: Prepare GodotSharp API assemblies
+        run: |
+          mkdir -p GodotSharp/Api/Debug
+          # Find GodotSharp API assemblies from NuGet cache and copy them
+          GODOT_SHARP_DLL=$(find ~/.nuget -name "GodotSharp.dll" -path "*/net8.0/*" 2>/dev/null | head -1)
+          if [ -n "$GODOT_SHARP_DLL" ]; then
+            GODOT_SHARP_DIR=$(dirname "$GODOT_SHARP_DLL")
+            cp "$GODOT_SHARP_DIR"/*.dll GodotSharp/Api/Debug/ 2>/dev/null || true
+            echo "Copied GodotSharp assemblies:"
+            ls GodotSharp/Api/Debug/
+          else
+            echo "WARNING: GodotSharp.dll not found in NuGet cache"
+          fi
+
       - name: Export HTML5
         run: |
           mkdir -p build/html5
