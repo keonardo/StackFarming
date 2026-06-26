@@ -1,0 +1,59 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Scripts/BaseCard.cs" id="1_base"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_coll"]
+size = Vector2(80, 100)
+
+[node name="ResourceCard" type="Area2D"]
+script = ExtResource("1_base")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_coll")
+
+[node name="Panel" type="Panel" parent="."]
+offset_left = -40.0
+offset_top = -50.0
+offset_right = 40.0
+offset_bottom = 50.0
+mouse_filter = 2
+
+[node name="NameLabel" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = 28.0
+grow_horizontal = 2
+text = "Card"
+horizontal_alignment = 1
+
+[node name="ValueALabel" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 14
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = 5.0
+offset_top = -10.0
+offset_right = -5.0
+offset_bottom = 13.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "A: 0"
+
+[node name="ValueBLabel" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = -30.0
+offset_right = -5.0
+offset_bottom = -7.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "B: 0"

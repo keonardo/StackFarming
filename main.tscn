@@ -1,0 +1,62 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://Scripts/IrrigationManager.cs" id="1_irrmgr"]
+[ext_resource type="Script" path="res://Scripts/SolarTermEngine.cs" id="2_termeng"]
+[ext_resource type="Script" path="res://Scripts/CardSpawner.cs" id="3_spawner"]
+[ext_resource type="PackedScene" path="res://Scenes/container_card.tscn" id="4_container"]
+[ext_resource type="PackedScene" path="res://Scenes/creature_card.tscn" id="5_creature"]
+
+[node name="Main" type="Node2D"]
+
+[node name="IrrigationManager" type="Node" parent="."]
+script = ExtResource("1_irrmgr")
+
+[node name="SolarTermEngine" type="Node" parent="."]
+script = ExtResource("2_termeng")
+TermDuration = 10.0
+
+[node name="CardSpawner" type="Node" parent="."]
+script = ExtResource("3_spawner")
+
+[node name="RiverCard" parent="." instance=ExtResource("4_container")]
+position = Vector2(150, 200)
+CardName = "河道"
+Type = 9
+ValueA = 999.0
+ValueB = 100.0
+IsIrrigated = true
+
+[node name="CanalCard" parent="." instance=ExtResource("4_container")]
+position = Vector2(250, 200)
+CardName = "水渠"
+Type = 10
+ValueA = 1.0
+ValueB = 100.0
+
+[node name="FarmlandCard1" parent="." instance=ExtResource("4_container")]
+position = Vector2(350, 200)
+CardName = "水稻田"
+Type = 7
+ValueA = 4.0
+ValueB = 100.0
+
+[node name="RiceCard" parent="." instance=ExtResource("5_creature")]
+position = Vector2(350, 235)
+CardName = "水稻"
+Type = 1
+ValueA = 100.0
+ValueB = 0.0
+
+[node name="FarmlandCard2" parent="." instance=ExtResource("4_container")]
+position = Vector2(550, 200)
+CardName = "旱田"
+Type = 7
+ValueA = 4.0
+ValueB = 100.0
+
+[node name="DuckCard" parent="." instance=ExtResource("5_creature")]
+position = Vector2(550, 235)
+CardName = "小鸭子"
+Type = 0
+ValueA = 100.0
+ValueB = 50.0

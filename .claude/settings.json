@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd E:/Git/Godot/StackFarming && dotnet *)",
+      "Bash(cd E:/Git/Godot/StackFarming && git *)",
+      "Bash(cd E:/Git/Godot/StackFarming && godot *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Edit(E:/Git/Godot/StackFarming/**)",
+      "Write(E:/Git/Godot/StackFarming/**)",
+      "Read(E:/Git/Godot/StackFarming/**)",
+      "Glob(E:/Git/Godot/StackFarming/**)",
+      "Grep(E:/Git/Godot/StackFarming/**)"
+    ]
+  }
+}

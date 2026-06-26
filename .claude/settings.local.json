@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh --version)",
+      "Bash(npx --version)",
+      "Bash(npm list *)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(npm view *)",
+      "Bash(npm search *)",
+      "Bash(npx -y @satelliteoflove/godot-mcp --install-addon .)",
+      "Bash(curl *)",
+      "Bash(butler --version)",
+      "Bash(reg query *)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Read(//d//**)",
+      "Read(//c//**)",
+      "Bash(git remote *)",
+      "Bash(git add *)"
+    ]
+  }
+}

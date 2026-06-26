@@ -1,0 +1,68 @@
+# Godot 4.x - Specific
+.godot/
+*.uid
+*.import
+*.tres.res
+*.tscn.res
+*.gd.res
+*.cs.res
+
+# Export
+export/
+export_presets.cfg
+.cfg.bak
+
+# Mono / .NET
+.mono/
+mono_crash.*.json
+*.user
+*.cache
+[Bb]in/
+[Oo]bj/
+.vs/
+.vscode/
+*.sln.DotSettings.user
+*.csproj.user
+.DotSettings.user
+*.userprefs
+*.suo
+*.userosscache
+*.sln.docstates
+**/[Bb]in/*
+**/[Oo]bj/*
+packages/
+
+# Build
+build/
+Builds/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Godot temporary
+*.tmp
+*.log
+*.godot/
+*.old
+
+# Misc
+cmd.exe
+
+# Claude Code / claudestat
+HANDOFF.md
+.claude/backups/
+.claude/file-history/
+.claude/plans/
+.claude/sessions/
+.claude/shell-snapshots/
+.claude/telemetry/
+.claude/session-env/
+.claude/cache/
