@@ -13,50 +13,50 @@ script = ExtResource("1_irrmgr")
 
 [node name="SolarTermEngine" type="Node" parent="."]
 script = ExtResource("2_termeng")
-TermDuration = 10.0
+term_duration = 10.0
 
 [node name="CardSpawner" type="Node" parent="."]
 script = ExtResource("3_spawner")
 
 [node name="RiverCard" parent="." instance=ExtResource("4_container")]
 position = Vector2(150, 200)
-CardName = "河道"
-Type = 9
-ValueA = 999.0
-ValueB = 100.0
-IsIrrigated = true
+card_name = "河道"
+type = 9
+value_a = 999.0
+value_b = 100.0
+is_irrigated = true
 
 [node name="CanalCard" parent="." instance=ExtResource("4_container")]
 position = Vector2(250, 200)
-CardName = "水渠"
-Type = 10
-ValueA = 1.0
-ValueB = 100.0
+card_name = "水渠"
+type = 10
+value_a = 1.0
+value_b = 100.0
 
 [node name="FarmlandCard1" parent="." instance=ExtResource("4_container")]
 position = Vector2(350, 200)
-CardName = "水稻田"
-Type = 7
-ValueA = 4.0
-ValueB = 100.0
+card_name = "水稻田"
+type = 7
+value_a = 4.0
+value_b = 100.0
 
 [node name="RiceCard" parent="." instance=ExtResource("5_creature")]
 position = Vector2(350, 235)
-CardName = "水稻"
-Type = 1
-ValueA = 100.0
-ValueB = 0.0
+card_name = "水稻"
+type = 1
+value_a = 100.0
+value_b = 0.0
 
 [node name="FarmlandCard2" parent="." instance=ExtResource("4_container")]
 position = Vector2(550, 200)
-CardName = "旱田"
-Type = 7
-ValueA = 4.0
-ValueB = 100.0
+card_name = "旱田"
+type = 7
+value_a = 4.0
+value_b = 100.0
 
 [node name="DuckCard" parent="." instance=ExtResource("5_creature")]
 position = Vector2(550, 235)
-CardName = "小鸭子"
-Type = 0
-ValueA = 100.0
-ValueB = 50.0
+card_name = "小鸭子"
+type = 0
+value_a = 100.0
+value_b = 50.0
