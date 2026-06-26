@@ -3,31 +3,33 @@ name: "Godot HTML5 Export & Deploy to Pages"
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 env:
   GODOT_VERSION: "4.6.2"
   PROJECT_NAME: "StackFarming"
-  EXPORT_NAME: "stack-agriculture"
 
 jobs:
   export-html5:
     name: HTML5 Export
     runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
-      - name: Install system dependencies
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq wget unzip dotnet-sdk-8.0
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Setup .NET SDK 8.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wget unzip
 
       - name: Download Godot ${{ env.GODOT_VERSION }}
         run: |
@@ -41,22 +43,24 @@ jobs:
           wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz"
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
           unzip -q Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
-          mv ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/
-          rm -rf ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/templates
+          mv ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/ 2>/dev/null || true
+          rm -rf ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/templates 2>/dev/null || true
+          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/
 
       - name: Restore NuGet packages
         run: dotnet restore "${{ env.PROJECT_NAME }}.csproj"
 
-      - name: Build C# solution
+      - name: Build C# solution (headless)
         run: |
-          ./godot --headless --build-solutions --quit 2>&1 || true
-          # Sometimes Godot exits with error even on success for headless builds
-          echo "Build step completed"
+          ./godot --headless --build-solutions --quit 2>&1
+          echo "Godot C# build step completed"
 
       - name: Export HTML5
         run: |
           mkdir -p build/html5
-          ./godot --headless --export-release "HTML5" "build/html5/index.html" 2>&1 || true
+          ./godot --headless --verbose --export-release "HTML5" "build/html5/index.html" 2>&1
+          echo "Export done. Contents:"
+          ls -la build/html5/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
