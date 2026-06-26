@@ -3,7 +3,7 @@ extends Node
 
 func _ready() -> void:
 	# Load the CJK font and apply as the default theme font
-	var font_file = load("res://fonts/NotoSansSC-Regular.ttf")
+	var font_file = load("res://fonts/simhei.ttf")
 	if font_file:
 		var theme = Theme.new()
 		theme.default_font = font_file
