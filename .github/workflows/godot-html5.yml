@@ -33,7 +33,13 @@ jobs:
         run: |
           wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip"
           unzip -q Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
-          mv Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64 godot
+          # Godot 4.x mono zips may contain a directory; find the actual binary
+          if [ -f "Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64" ]; then
+            mv Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64 godot
+          else
+            mv Godot_v${GODOT_VERSION}-stable_mono_linux_*_64/Godot_v${GODOT_VERSION}-stable_mono_linux.* godot 2>/dev/null || \
+            mv Godot_v${GODOT_VERSION}-stable_mono_linux_*_64/Godot_v* godot
+          fi
           chmod +x godot
 
       - name: Download HTML5 export templates
