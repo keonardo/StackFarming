@@ -2,7 +2,6 @@
 .godot/
 GodotSharp/
 *.uid
-*.import
 *.tres.res
 *.tscn.res
 *.gd.res
