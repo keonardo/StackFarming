@@ -54,10 +54,10 @@ jobs:
       - name: Restore NuGet packages
         run: dotnet restore "${{ env.PROJECT_NAME }}.csproj"
 
-      - name: Build C# solution (headless)
+      - name: Build C# solution
         run: |
-          ./godot --headless --build-solutions --quit 2>&1
-          echo "Godot C# build step completed"
+          dotnet build "${{ env.PROJECT_NAME }}.csproj" -c Release --no-restore
+          echo "C# build step completed"
 
       - name: Export HTML5
         run: |
