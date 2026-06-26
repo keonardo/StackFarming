@@ -21,6 +21,7 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 [autoload]
 
 MCPGameBridge="res://addons/godot_mcp/game_bridge/mcp_game_bridge.gd"
+GlobalTheme="res://Scripts/global_theme.gd"
 
 [display]
 
@@ -28,10 +29,6 @@ window/size/viewport_width=1152
 window/size/viewport_height=648
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-
-[gui]
-
-theme/custom="res://themes/default_theme.tres"
 
 [editor_plugins]
 
