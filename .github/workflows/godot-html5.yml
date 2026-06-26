@@ -33,14 +33,22 @@ jobs:
         run: |
           wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip"
           unzip -q Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
-          # Godot 4.x mono zips may contain a directory; find the actual binary
-          if [ -f "Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64" ]; then
-            mv Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64 godot
+          # Godot 4.x mono zips contain a directory with the binary + GodotSharp/ API assemblies
+          GODOT_DIR=$(find . -maxdepth 1 -type d -name "Godot_v*" | head -1)
+          if [ -n "$GODOT_DIR" ]; then
+            mv "$GODOT_DIR"/Godot_v* godot 2>/dev/null || mv "$GODOT_DIR"/Godot* godot
+            # Also copy GodotSharp API assemblies to project (needed for headless export)
+            if [ -d "$GODOT_DIR/GodotSharp" ]; then
+              cp -r "$GODOT_DIR/GodotSharp" ./
+              echo "Copied GodotSharp from Godot bundle"
+            fi
+            rm -rf "$GODOT_DIR"
           else
-            mv Godot_v${GODOT_VERSION}-stable_mono_linux_*_64/Godot_v${GODOT_VERSION}-stable_mono_linux.* godot 2>/dev/null || \
-            mv Godot_v${GODOT_VERSION}-stable_mono_linux_*_64/Godot_v* godot
+            # Binary extracted directly (no subdirectory)
+            mv Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64 godot
           fi
           chmod +x godot
+          ls -la GodotSharp/Api/Debug/ 2>/dev/null || true
 
       - name: Download HTML5 export templates
         run: |
@@ -58,20 +66,6 @@ jobs:
         run: |
           dotnet build "${{ env.PROJECT_NAME }}.csproj" -c Release --no-restore
           echo "C# build step completed"
-
-      - name: Prepare GodotSharp API assemblies
-        run: |
-          mkdir -p GodotSharp/Api/Debug
-          # Find GodotSharp API assemblies from NuGet cache and copy them
-          GODOT_SHARP_DLL=$(find ~/.nuget -name "GodotSharp.dll" -path "*/net8.0/*" 2>/dev/null | head -1)
-          if [ -n "$GODOT_SHARP_DLL" ]; then
-            GODOT_SHARP_DIR=$(dirname "$GODOT_SHARP_DLL")
-            cp "$GODOT_SHARP_DIR"/*.dll GodotSharp/Api/Debug/ 2>/dev/null || true
-            echo "Copied GodotSharp assemblies:"
-            ls GodotSharp/Api/Debug/
-          else
-            echo "WARNING: GodotSharp.dll not found in NuGet cache"
-          fi
 
       - name: Export HTML5
         run: |
