@@ -12,5 +12,8 @@
       "Glob(E:/Git/Godot/StackFarming/**)",
       "Grep(E:/Git/Godot/StackFarming/**)"
     ]
+  },
+  "enabledPlugins": {
+    "godot-prompter@godot-prompter-marketplace": true
   }
 }

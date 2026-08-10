@@ -1,115 +1,142 @@
-# CardSpawner.gd — singleton card factory
+# CardSpawner.gd — singleton card factory（YARD Registry 优先）
 extends Node
 class_name CardSpawner
 
-# ============================================================
-# Singleton
-# ============================================================
 static var instance: CardSpawner = null
 
-# ============================================================
-# Preloaded scenes
-# ============================================================
-var _resource_card_scene: PackedScene = null
-var _creature_card_scene: PackedScene = null
-var _container_card_scene: PackedScene = null
-var _pest_card_scene: PackedScene = null
+## YARD Registry — 唯一数据源，每张卡牌一个 .tres
+@export var card_registry: Resource = null  # 在场景中指向 res://cards_registry.tres
 
-# ============================================================
-# Lifecycle
-# ============================================================
+## 当 registry 不可用时回退到内置值
+## 格式: value_a, value_b
+const _FALLBACK := {
+	# Creatures
+	10: [100.0, 0.0],   # DUCK
+	11: [100.0, 0.0],   # WILD_RICE_SEED
+	12: [80.0, 0.0],    # WATER_CALTROP
+	13: [30.0, 0.0],    # BUG
+	# Resources
+	30: [5.0, 120.0],   # FISH
+	31: [8.0, 90.0],    # DUCK_EGG
+	32: [2.0, 120.0],   # DUCK_FEATHER
+	33: [6.0, 180.0],   # WILD_RICE
+	34: [7.0, 150.0],   # CALTROP
+	35: [30.0, 60.0],   # WATER
+	36: [10.0, 90.0],   # FECES
+	37: [15.0, 180.0],  # FERTILIZER
+	# Terrains
+	0: [4.0, 100.0],    # POND
+	1: [6.0, 100.0],    # BIG_POND
+	2: [10.0, 100.0],   # FISH_POND
+	3: [4.0, 80.0],     # PADDY_FIELD
+	# Tools
+	20: [10.0, 1.0],    # FISHING_ROD
+	21: [15.0, 1.0],    # HOE
+	22: [20.0, 30.0],   # WATERWHEEL
+	23: [15.0, 1.0],    # COMPOST_BIN
+	24: [999.0, 0.5],   # LABORER
+}
+
+# ── card_type → string_id 映射（用于 Registry.load_entry）──
+# 文件名不含扩展名即为 YARD Registry 中的 string_id
+const _TYPE_TO_ID := {
+	# Terrain
+	0: "pond", 1: "big_pond", 2: "fish_pond", 3: "paddy_field",
+	# Creatures
+	10: "duck", 11: "wild_rice_seed", 12: "water_caltrop", 13: "bug",
+	# Tools
+	20: "fishing_rod", 21: "hoe", 22: "waterwheel", 23: "compost_bin", 24: "laborer",
+	# Resources
+	30: "fish", 31: "duck_egg", 32: "duck_feather", 33: "wild_rice",
+	34: "caltrop", 35: "water", 36: "feces", 37: "fertilizer",
+}
+
+var creature_scene: PackedScene
+var resource_scene: PackedScene
+var terrain_scene: PackedScene
+var tool_scene: PackedScene
+
 func _enter_tree() -> void:
 	instance = self
-	_resource_card_scene = load("res://Scenes/resource_card.tscn")
-	_creature_card_scene = load("res://Scenes/creature_card.tscn")
-	_container_card_scene = load("res://Scenes/container_card.tscn")
-	_pest_card_scene = load("res://Scenes/pest_card.tscn")
+	creature_scene = load("res://Scenes/creature_card.tscn")
+	resource_scene = load("res://Scenes/resource_card.tscn")
+	terrain_scene  = load("res://Scenes/container_card.tscn")
+	tool_scene     = load("res://Scenes/tool_card.tscn")
 
 func _exit_tree() -> void:
-	if instance == self:
-		instance = null
+	if instance == self: instance = null
 
-# ============================================================
-# Spawn helpers
-# ============================================================
-func spawn_resource_card(card_type: CardEnums.CardType, card_name_str: String, position: Vector2) -> BaseCard:
-	var card: BaseCard
-	if _resource_card_scene != null:
-		card = _resource_card_scene.instantiate() as BaseCard
-	else:
-		card = BaseCard.new()
-		_add_collision_to_card(card)
+# ── 解析数值：Registry → GameData → Fallback ──
+# priority: 1) card_registry  2) fallback
+func _get_vals(ct: int) -> Array:
+	if card_registry and card_registry.has_string_id(_TYPE_TO_ID.get(ct, "")):
+		var def: CardDef = card_registry.load_entry(_TYPE_TO_ID[ct])
+		if def:
+			return [def.value_a, def.value_b]
+	if _FALLBACK.has(ct):
+		return _FALLBACK[ct]
+	return [100.0, 0.0]
 
-	card.role = CardEnums.CardRole.RESOURCE
-	card.type = card_type
-	card.card_name = card_name_str
-	card.value_a = 10.0   # Default intensity
-	card.value_b = 60.0   # Default duration
-	card.global_position = position
+# ── 从 Registry 读取卡牌名称（优先），否则 fallback 到 CardEnums ──
+func _get_name(ct: int, nm: String) -> String:
+	if nm and not nm.is_empty():
+		return nm
+	if card_registry and card_registry.has_string_id(_TYPE_TO_ID.get(ct, "")):
+		var def: CardDef = card_registry.load_entry(_TYPE_TO_ID[ct])
+		if def and not def.card_name.is_empty():
+			return def.card_name
+	return CardEnums.default_name(ct)
 
-	get_tree().root.call_deferred("add_child", card)
-	return card
+func spawn_card(ct: int, nm: String = "", pos: Vector2 = Vector2.ZERO) -> BaseCard:
+	match CardEnums.role_from_type(ct):
+		CardEnums.CardRole.CREATURE: return sp_c(ct, nm, pos)
+		CardEnums.CardRole.RESOURCE:  return sp_r(ct, nm, pos)
+		CardEnums.CardRole.TERRAIN:   return sp_t(ct, nm, pos)
+		CardEnums.CardRole.TOOL:      return sp_k(ct, nm, pos)
+	return null
 
-func spawn_creature_card(card_type: CardEnums.CardType, card_name_str: String, position: Vector2) -> CreatureCard:
-	var card: CreatureCard
-	if _creature_card_scene != null:
-		card = _creature_card_scene.instantiate() as CreatureCard
-	else:
-		card = CreatureCard.new()
-		_add_collision_to_card(card)
+func sp_c(ct: int, nm: String, pos: Vector2) -> BaseCard:
+	var c: BaseCard = _make(creature_scene, BaseCard.new())
+	var v := _get_vals(ct)
+	c.role = 0; c.type = ct; c.card_name = _get_name(ct, nm)
+	c.value_a = v[0]; c.value_b = v[1]
+	c.global_position = pos; get_tree().root.call_deferred("add_child", c); return c
 
-	card.role = CardEnums.CardRole.CREATURE
-	card.type = card_type
-	card.card_name = card_name_str
-	card.value_a = 100.0  # Default health
-	card.value_b = 0.0    # Default progress
-	card.global_position = position
+func sp_r(ct: int, nm: String, pos: Vector2) -> BaseCard:
+	var c: BaseCard = _make(resource_scene, BaseCard.new())
+	var v := _get_vals(ct)
+	c.role = 1; c.type = ct; c.card_name = _get_name(ct, nm)
+	c.intensity = v[0]; c.duration = v[1]
+	c.global_position = pos; get_tree().root.call_deferred("add_child", c); return c
 
-	get_tree().root.call_deferred("add_child", card)
-	return card
+func sp_t(ct: int, nm: String, pos: Vector2) -> BaseCard:
+	var c: TerrainCard = _make_terrain(terrain_scene)
+	var v := _get_vals(ct)
+	c.role = 2; c.type = ct; c.card_name = _get_name(ct, nm)
+	c.capacity = v[0]; c.moisture = v[1]
+	c.global_position = pos; get_tree().root.call_deferred("add_child", c); return c
 
-func spawn_pest_card(position: Vector2) -> PestCard:
-	var card: PestCard
-	if _pest_card_scene != null:
-		card = _pest_card_scene.instantiate() as PestCard
-	else:
-		card = PestCard.new()
-		_add_collision_to_card(card)
+func sp_k(ct: int, nm: String, pos: Vector2) -> BaseCard:
+	var c: ToolCard = _make_tool(tool_scene)
+	var v := _get_vals(ct)
+	c.role = 3; c.type = ct; c.card_name = _get_name(ct, nm)
+	c.durability = v[0]; c.efficiency = v[1]
+	c.global_position = pos; get_tree().root.call_deferred("add_child", c); return c
 
-	card.role = CardEnums.CardRole.CREATURE
-	card.type = CardEnums.CardType.PEST
-	card.card_name = "害虫"
-	card.value_a = 50.0   # Default health
-	card.value_b = 0.0
-	card.global_position = position
+func _make(scene: PackedScene, fallback: BaseCard) -> BaseCard:
+	if scene: return scene.instantiate()
+	var c = fallback; _add_col(c); return c
 
-	get_tree().root.call_deferred("add_child", card)
-	return card
+func _make_terrain(scene: PackedScene) -> TerrainCard:
+	if scene: return scene.instantiate()
+	var c = TerrainCard.new(); _add_col(c); return c
 
-func spawn_container_card(card_type: CardEnums.CardType, card_name_str: String, position: Vector2) -> ContainerCard:
-	var card: ContainerCard
-	if _container_card_scene != null:
-		card = _container_card_scene.instantiate() as ContainerCard
-	else:
-		card = ContainerCard.new()
-		_add_collision_to_card(card)
+func _make_tool(scene: PackedScene) -> ToolCard:
+	if scene:
+		var inst = scene.instantiate()
+		if inst is ToolCard: return inst
+	var c = ToolCard.new(); _add_col(c); return c
 
-	card.role = CardEnums.CardRole.CONTAINER
-	card.type = card_type
-	card.card_name = card_name_str
-	card.value_a = 5.0    # Default capacity
-	card.value_b = 100.0  # Default moisture
-	card.global_position = position
-
-	get_tree().root.call_deferred("add_child", card)
-	return card
-
-# ============================================================
-# Helpers
-# ============================================================
-func _add_collision_to_card(card: Area2D) -> void:
-	var collision_shape := CollisionShape2D.new()
-	var rect_shape := RectangleShape2D.new()
-	rect_shape.size = Vector2(80, 100)
-	collision_shape.shape = rect_shape
-	card.add_child(collision_shape)
+func _add_col(card: Area2D) -> void:
+	var s = CollisionShape2D.new(); var r = RectangleShape2D.new()
+	r.size = Vector2(80, 100); s.shape = r; card.add_child(s)

@@ -4,12 +4,13 @@ class_name BaseCard
 
 # Preload CJK font (applied to all labels at runtime)
 const CJK_FONT = preload("res://fonts/simhei.ttf")
+const WATER_SHADER := preload("res://shaders/water_ripple_border.gdshader")
 
 # ============================================================
 # Exported properties
 # ============================================================
 @export var role: CardEnums.CardRole = CardEnums.CardRole.CREATURE
-@export var type: CardEnums.CardType = CardEnums.CardType.ANIMAL
+@export var type: CardEnums.CardType = CardEnums.CardType.DUCK
 @export var card_name: String = "Unnamed Card"
 @export var show_debug_info: bool = true
 
@@ -19,6 +20,9 @@ const CJK_FONT = preload("res://fonts/simhei.ttf")
 		if role == CardEnums.CardRole.CREATURE and value_a <= 0.0 and not _is_dying:
 			_is_dying = true
 			on_health_zero()
+		if role == CardEnums.CardRole.TOOL and value_a <= 0.0 and not _is_dying:
+			_is_dying = true
+			on_tool_broken()
 
 @export var value_b: float = 0.0
 
@@ -35,11 +39,15 @@ signal stack_parent_changed(old_parent: BaseCard, new_parent: BaseCard)
 signal stack_child_changed(old_child: BaseCard, new_child: BaseCard)
 signal on_card_stacked(stacked_card: BaseCard, target_card: BaseCard)
 signal health_zero(card: BaseCard)
+signal tool_broken(card: BaseCard)
+signal card_dropped_on_market(card: BaseCard)
+signal card_dropped_on_labor_tool(card: BaseCard)
+signal card_dropped_on_labor_target(card: BaseCard)
 
 # ============================================================
-# Semantic property accessors
+# Semantic property accessors — Creature
 # ============================================================
-## Creature: ValueA = Health
+## Creature: ValueA = Hunger/Health
 var health: float:
 	get: return value_a if role == CardEnums.CardRole.CREATURE else 0.0
 	set(v):
@@ -53,33 +61,50 @@ var progress: float:
 		if role == CardEnums.CardRole.CREATURE:
 			value_b = max(0.0, v)
 
-## Resource: ValueA = Intensity
+# ============================================================
+# Semantic property accessors — Resource
+# ============================================================
 var intensity: float:
 	get: return value_a if role == CardEnums.CardRole.RESOURCE else 0.0
 	set(v):
 		if role == CardEnums.CardRole.RESOURCE:
 			value_a = v
 
-## Resource: ValueB = Duration
 var duration: float:
 	get: return value_b if role == CardEnums.CardRole.RESOURCE else 0.0
 	set(v):
 		if role == CardEnums.CardRole.RESOURCE:
 			value_b = max(0.0, v)
 
-## Container: ValueA = Capacity
+# ============================================================
+# Semantic property accessors — Terrain
+# ============================================================
 var capacity: float:
-	get: return value_a if role == CardEnums.CardRole.CONTAINER else 0.0
+	get: return value_a if role == CardEnums.CardRole.TERRAIN else 0.0
 	set(v):
-		if role == CardEnums.CardRole.CONTAINER:
+		if role == CardEnums.CardRole.TERRAIN:
 			value_a = max(0.0, v)
 
-## Container: ValueB = Moisture
 var moisture: float:
-	get: return value_b if role == CardEnums.CardRole.CONTAINER else 0.0
+	get: return value_b if role == CardEnums.CardRole.TERRAIN else 0.0
 	set(v):
-		if role == CardEnums.CardRole.CONTAINER:
+		if role == CardEnums.CardRole.TERRAIN:
 			value_b = max(0.0, v)
+
+# ============================================================
+# Semantic property accessors — Tool
+# ============================================================
+var durability: float:
+	get: return value_a if role == CardEnums.CardRole.TOOL else 0.0
+	set(v):
+		if role == CardEnums.CardRole.TOOL:
+			value_a = max(0.0, v)
+
+var efficiency: float:
+	get: return value_b if role == CardEnums.CardRole.TOOL else 0.0
+	set(v):
+		if role == CardEnums.CardRole.TOOL:
+			value_b = v
 
 # ============================================================
 # Internal state
@@ -87,6 +112,7 @@ var moisture: float:
 var _is_dying: bool = false
 var _is_dragging: bool = false
 var _drag_offset: Vector2 = Vector2.ZERO
+var _water_overlay: ColorRect = null   # 水纹着色器 overlay（仅地貌卡使用）
 
 # ============================================================
 # Lifecycle
@@ -97,7 +123,6 @@ func _ready() -> void:
 	call_deferred("_initialize_starting_stack")
 
 func _apply_cjk_font_to_labels() -> void:
-	# Walk all children recursively and set the CJK font on every Label
 	_apply_font_recursive(self)
 
 func _apply_font_recursive(node: Node) -> void:
@@ -135,6 +160,7 @@ func _process(delta: float) -> void:
 			return
 
 	_update_visuals()
+	_update_water_overlay()
 
 # ============================================================
 # Mutual pushing — prevent overlapping independent cards
@@ -184,30 +210,41 @@ func _update_visuals() -> void:
 	match role:
 		CardEnums.CardRole.CREATURE:
 			if val_a_label != null:
-				val_a_label.text = "HP: %.0f" % health
+				match type:
+					CardEnums.CardType.DUCK:
+						val_a_label.text = "饥饿: %.0f" % health
+					_:
+						val_a_label.text = "耐久: %.0f" % health
 			if val_b_label != null:
-				val_b_label.text = "Prog: %.0f%%" % progress
+				val_b_label.text = "进度: %.0f%%" % progress
 			if progress_bar != null:
 				progress_bar.visible = true
 				progress_bar.value = progress
 
 		CardEnums.CardRole.RESOURCE:
 			if val_a_label != null:
-				val_a_label.text = "Int: %.1f" % intensity
+				val_a_label.text = "含量: %.1f" % intensity
 			if val_b_label != null:
-				val_b_label.text = "Dur: %.0fs" % duration
+				val_b_label.text = "保鲜: %.0fs" % duration
 			if progress_bar != null:
 				progress_bar.visible = false
 
-		CardEnums.CardRole.CONTAINER:
-			var irrigated: bool = false
-			if self is ContainerCard:
-				irrigated = (self as ContainerCard).is_irrigated
-			var status_str: String = "(Irr)" if irrigated else "(Dry)"
+		CardEnums.CardRole.TERRAIN:
+			var terrain_card := self as TerrainCard
+			var irrigated: bool = terrain_card.is_irrigated if terrain_card else false
+			var status_str: String = "(润)" if irrigated else "(干)"
 			if val_a_label != null:
-				val_a_label.text = "Cap: %.0f" % capacity
+				val_a_label.text = "承载: %.0f" % capacity
 			if val_b_label != null:
-				val_b_label.text = "Moist: %.0f %s" % [moisture, status_str]
+				val_b_label.text = "湿润: %.0f %s" % [moisture, status_str]
+			if progress_bar != null:
+				progress_bar.visible = false
+
+		CardEnums.CardRole.TOOL:
+			if val_a_label != null:
+				val_a_label.text = "耐久: %.0f" % durability
+			if val_b_label != null:
+				val_b_label.text = "效率: %.1fx" % efficiency
 			if progress_bar != null:
 				progress_bar.visible = false
 
@@ -229,13 +266,42 @@ func _input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 			_is_dragging = false
 			z_index = 0
+
+			# Check if dropped on market UI
+			if _check_drop_on_market():
+				get_viewport().set_input_as_handled()
+				return
+
+			# Check if dropped on labor UI
+			if _check_drop_on_labor():
+				get_viewport().set_input_as_handled()
+				return
+
+			# Normal stacking behavior
 			var target: BaseCard = _find_best_stack_target()
 			if target != null:
 				stack_on(target)
 			get_viewport().set_input_as_handled()
 
 # ============================================================
-# Stack target finding
+# Drop target detection — Market & Labor (hook points)
+# ============================================================
+func _check_drop_on_market() -> bool:
+	var market_manager = get_node_or_null("/root/Main/MarketManager")
+	if market_manager and market_manager.has_method("try_sell_card"):
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		return market_manager.try_sell_card(self, mouse_pos)
+	return false
+
+func _check_drop_on_labor() -> bool:
+	var labor_manager = get_node_or_null("/root/Main/LaborManager")
+	if labor_manager and labor_manager.has_method("try_accept_card"):
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		return labor_manager.try_accept_card(self, mouse_pos)
+	return false
+
+# ============================================================
+# Stack target finding — skip BUG (pests don't stack)
 # ============================================================
 func _find_best_stack_target() -> BaseCard:
 	var best_target: BaseCard = null
@@ -244,8 +310,11 @@ func _find_best_stack_target() -> BaseCard:
 	for area in get_overlapping_areas():
 		if area is BaseCard and area != self and is_instance_valid(area):
 			var card: BaseCard = area as BaseCard
-			# Pests don't participate in stacking
-			if card.type == CardEnums.CardType.PEST or type == CardEnums.CardType.PEST:
+			# BUGs don't participate in normal stacking
+			if card.type == CardEnums.CardType.BUG or type == CardEnums.CardType.BUG:
+				continue
+			# TOOLs don't stack
+			if card.role == CardEnums.CardRole.TOOL:
 				continue
 			# Can't stack on a card that already has a child
 			if card.stack_child != null and card.stack_child != self:
@@ -305,10 +374,10 @@ func get_stack_root() -> BaseCard:
 		current = current.stack_parent
 	return current
 
-func get_container() -> ContainerCard:
+func get_terrain() -> TerrainCard:
 	var root: BaseCard = get_stack_root()
-	if root is ContainerCard:
-		return root as ContainerCard
+	if root is TerrainCard:
+		return root as TerrainCard
 	return null
 
 func get_stack_chain() -> Array[BaseCard]:
@@ -379,14 +448,33 @@ func on_health_zero() -> void:
 	play_death_animation()
 	print("[Card] ", card_name, " Health is zero. Transforming...")
 
-	var replacement_type: CardEnums.CardType = CardEnums.CardType.DRY_GRASS
-	var replacement_name: String = "枯草"
+	match type:
+		CardEnums.CardType.DUCK:
+			# Duck dies → Duck Feather
+			_spawn_replacement(CardEnums.CardType.DUCK_FEATHER, "鸭毛")
+		CardEnums.CardType.WILD_RICE_SEED, CardEnums.CardType.WATER_CALTROP:
+			# Crop durability zero → destroyed, no replacement
+			_detach_and_free()
+			return
+		_:
+			_detach_and_free()
+			return
 
-	if type == CardEnums.CardType.FISH:
-		replacement_type = CardEnums.CardType.DEAD_FISH
-		replacement_name = "死鱼"
+	_detach_and_free()
 
-	# Detach from stack
+# ============================================================
+# Tool breakage
+# ============================================================
+func on_tool_broken() -> void:
+	tool_broken.emit(self)
+	play_death_animation()
+	print("[Tool] ", card_name, " durability zero. Destroying...")
+	_detach_and_free()
+
+# ============================================================
+# Internal helpers
+# ============================================================
+func _spawn_replacement(replacement_type: CardEnums.CardType, replacement_name: String) -> void:
 	var parent: BaseCard = stack_parent
 	var child: BaseCard = stack_child
 
@@ -397,15 +485,69 @@ func on_health_zero() -> void:
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)
 
-	# Spawn replacement card
 	if CardSpawner.instance != null:
-		var new_card: BaseCard = CardSpawner.instance.spawn_resource_card(
-			replacement_type, replacement_name, global_position
-		)
+		var new_card: BaseCard = CardSpawner.instance.spawn_card(replacement_type, replacement_name, global_position)
 		if new_card != null:
 			if parent != null:
 				new_card.stack_on(parent)
 			if child != null:
 				child.stack_on(new_card)
+
+# ============================================================
+# Water ripple overlay (terrain cards only)
+# ============================================================
+func get_water_overlay() -> ColorRect:
+	if _water_overlay: return _water_overlay
+	if role != CardEnums.CardRole.TERRAIN: return null
+
+	var panel: Control = get_node_or_null("Panel") as Control
+	if not panel: return null
+
+	var overlay := ColorRect.new()
+	overlay.name = "WaterOverlay"
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = -1
+
+	var mat := ShaderMaterial.new()
+	mat.shader = WATER_SHADER
+	mat.set_shader_parameter("moisture_level", 0.0)
+	overlay.material = mat
+
+	panel.add_child(overlay)
+	panel.move_child(overlay, 0)  # Behind all other panel children
+	_water_overlay = overlay
+	return overlay
+
+func _update_water_overlay() -> void:
+	if role != CardEnums.CardRole.TERRAIN: return
+	var overlay := get_water_overlay()
+	if not overlay: return
+	var mat: ShaderMaterial = overlay.material as ShaderMaterial
+	if not mat: return
+
+	var terrain := self as TerrainCard
+	if not terrain: return
+
+	var level: float = clamp(moisture / 100.0, 0.0, 1.0)
+	mat.set_shader_parameter("moisture_level", level)
+
+	# Water terrain has full water color; paddy has blue tint
+	if terrain.is_water_terrain():
+		mat.set_shader_parameter("water_color", Color(0.15, 0.50, 0.95, 0.75))
+	else:
+		mat.set_shader_parameter("water_color", Color(0.25, 0.60, 0.85, 0.55))
+
+
+func _detach_and_free() -> void:
+	var parent: BaseCard = stack_parent
+	var child: BaseCard = stack_child
+
+	if parent != null:
+		parent.stack_child = null
+		parent.stack_child_changed.emit(self, null)
+	if child != null:
+		child.stack_parent = null
+		child.stack_parent_changed.emit(self, null)
 
 	queue_free()

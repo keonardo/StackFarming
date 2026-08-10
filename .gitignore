@@ -66,3 +66,4 @@ HANDOFF.md
 .claude/telemetry/
 .claude/session-env/
 .claude/cache/
+.claude/GodotPrompter/

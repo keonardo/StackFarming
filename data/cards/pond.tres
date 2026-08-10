@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="CardDef" format=3 uid="uid://dps56xmurp4fg"]
+
+[ext_resource type="Script" uid="uid://ys20t1uof4at" path="res://Scripts/card_def.gd" id="1_a6k3v"]
+
+[resource]
+script = ExtResource("1_a6k3v")
+card_name = "水塘"
+value_a = 4.0
+value_b = 100.0

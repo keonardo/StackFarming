@@ -6,6 +6,10 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PAT}"
       }
+    },
+    "godot": {
+      "command": "npx",
+      "args": ["-y", "@satelliteoflove/godot-mcp"]
     }
   }
 }

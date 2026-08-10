@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Scripts/labor_manager.gd" id="1_labor"]
+
+[sub_resource type="RectangleShape2D" id="rect_shape"]
+size = Vector2(90, 110)
+
+[node name="LaborManager" type="Area2D"]
+collision_layer = 3
+collision_mask = 3
+script = ExtResource("1_labor")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("rect_shape")

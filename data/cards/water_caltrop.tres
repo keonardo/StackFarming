@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="CardDef" format=3 uid="uid://mvrnlvtg8ymb"]
+
+[ext_resource type="Script" path="res://Scripts/card_def.gd" id="1_pa1tt"]
+
+[resource]
+script = ExtResource("1_pa1tt")
+card_type = 12
+card_name = "菱角"
+value_a = 80.0

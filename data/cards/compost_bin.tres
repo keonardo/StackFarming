@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CardDef" format=3 uid="uid://det3nyh2q8md"]
+
+[ext_resource type="Script" path="res://Scripts/card_def.gd" id="1_k6h1d"]
+
+[resource]
+script = ExtResource("1_k6h1d")
+card_type = 23
+card_name = "堆肥箱"
+value_a = 15.0
+value_b = 1.0

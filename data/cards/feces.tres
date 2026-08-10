@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CardDef" format=3 uid="uid://j85wq7rwm2mj"]
+
+[ext_resource type="Script" path="res://Scripts/card_def.gd" id="1_5u08m"]
+
+[resource]
+script = ExtResource("1_5u08m")
+card_type = 36
+card_name = "粪便"
+value_a = 10.0
+value_b = 90.0

@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="Registry" format=3 uid="uid://b6mfjktx4gaav"]
+
+[ext_resource type="Script" uid="uid://dqtv77mng5dyh" path="res://addons/yard/registry.gd" id="1_sf4ln"]
+
+[resource]
+script = ExtResource("1_sf4ln")
+_version = 2
+_scan_rulesets = Array[Dictionary]([{
+&"allowed_file_extensions": Array[String]([]),
+&"class_restrictions": Array[StringName]([&"\"res://Scripts/card_def.gd\""]),
+&"recursive_scan": false,
+&"scan_directories": Array[String]([]),
+&"scan_regex_exclude": "",
+&"scan_regex_include": ""
+}])
+_uids_to_string_ids = Dictionary[StringName, StringName]({
+&"uid://427a5327ik2h": &"fertilizer",
+&"uid://b0wsgbywtujuc": &"waterwheel",
+&"uid://b12c6pm5oln1l": &"duck",
+&"uid://b1e3g1sksdva2": &"caltrop",
+&"uid://b4wj1v5rkq0dd": &"duck_feather",
+&"uid://bcwsmim0squ4b": &"wild_rice_seed",
+&"uid://buedh82uubo60": &"wild_rice",
+&"uid://bx24hv00xo0ke": &"water",
+&"uid://bxljoqdg7qgh0": &"big_pond",
+&"uid://c087iib5vn8df": &"fishing_rod",
+&"uid://c3v4jhqokhlnl": &"bug",
+&"uid://c5l7t3u21qtn4": &"hoe",
+&"uid://cjfcu6h5b6m0n": &"fish_pond",
+&"uid://d1xpf8mn1wvpb": &"fish",
+&"uid://det3nyh2q8md": &"compost_bin",
+&"uid://dilcp8awemt4d": &"laborer",
+&"uid://dou0xqdudsh6q": &"duck_egg",
+&"uid://dps56xmurp4fg": &"pond",
+&"uid://j85wq7rwm2mj": &"feces",
+&"uid://mvrnlvtg8ymb": &"water_caltrop",
+&"uid://sxw531rlsnjb": &"paddy_field"
+})
+_string_ids_to_uids = Dictionary[StringName, StringName]({
+&"big_pond": &"uid://bxljoqdg7qgh0",
+&"bug": &"uid://c3v4jhqokhlnl",
+&"caltrop": &"uid://b1e3g1sksdva2",
+&"compost_bin": &"uid://det3nyh2q8md",
+&"duck": &"uid://b12c6pm5oln1l",
+&"duck_egg": &"uid://dou0xqdudsh6q",
+&"duck_feather": &"uid://b4wj1v5rkq0dd",
+&"feces": &"uid://j85wq7rwm2mj",
+&"fertilizer": &"uid://427a5327ik2h",
+&"fish": &"uid://d1xpf8mn1wvpb",
+&"fish_pond": &"uid://cjfcu6h5b6m0n",
+&"fishing_rod": &"uid://c087iib5vn8df",
+&"hoe": &"uid://c5l7t3u21qtn4",
+&"laborer": &"uid://dilcp8awemt4d",
+&"paddy_field": &"uid://sxw531rlsnjb",
+&"pond": &"uid://dps56xmurp4fg",
+&"water": &"uid://bx24hv00xo0ke",
+&"water_caltrop": &"uid://mvrnlvtg8ymb",
+&"waterwheel": &"uid://b0wsgbywtujuc",
+&"wild_rice": &"uid://buedh82uubo60",
+&"wild_rice_seed": &"uid://bcwsmim0squ4b"
+})

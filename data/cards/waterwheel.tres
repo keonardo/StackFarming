@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CardDef" format=3 uid="uid://b0wsgbywtujuc"]
+
+[ext_resource type="Script" path="res://Scripts/card_def.gd" id="1_habsc"]
+
+[resource]
+script = ExtResource("1_habsc")
+card_type = 22
+card_name = "引水车"
+value_a = 20.0
+value_b = 30.0

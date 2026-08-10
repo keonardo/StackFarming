@@ -1,43 +1,52 @@
-# SolarTermEngine.gd — 24 solar term cycle driver
+# SolarTermEngine.gd — 二十四节气引擎 (v1)
+# Autoload — 周期性轮转节气卡（惊蛰/芒种/霜降），驱动全局事件
 extends Node
 class_name SolarTermEngine
 
 # ============================================================
-# Singleton
+# Signals — UI 层监听用于提示/动画
+# ============================================================
+## 节气切换时发射
+signal term_changed(old_term: CardEnums.SolarTerm, new_term: CardEnums.SolarTerm)
+## 节气来临前 N 秒警告（用于 UI 倒计时提示）
+signal term_warning(next_term: CardEnums.SolarTerm, seconds_remaining: float)
+
+# ============================================================
+# Singleton 访问器（RefCounted behavior 可通过 .instance 访问）
 # ============================================================
 static var instance: SolarTermEngine = null
 
 # ============================================================
-# Static globals (accessed by other scripts)
+# 导出配置 — 全部在 Inspector 中可调
 # ============================================================
-static var current_term: CardEnums.SolarTerm = CardEnums.SolarTerm.NONE
-static var crop_growth_speed_modifier: float = 1.0
+@export_group("⏱️ 节气周期")
+@export var gap_duration: float = 90.0        ## 节气间隔时长（秒）— 正常季节
+@export var warning_time: float = 10.0         ## 节气来临前多少秒发警告
+
+@export_group("🐛 惊蛰 (Jingzhe)")
+@export var jingzhe_duration: float = 30.0
+@export var jingzhe_bugs_per_field_min: int = 1
+@export var jingzhe_bugs_per_field_max: int = 3
+@export var jingzhe_bug_spawn_mult: float = 2.0   ## 虫害自然生成概率倍率
+
+@export_group("🌾 芒种 (Mangzhong)")
+@export var mangzhong_duration: float = 45.0
+@export var mangzhong_moisture_drain_pct: float = 0.5  ## 初始瞬间削减比例
+@export var mangzhong_decay_mult: float = 2.0           ## 湿润衰减速度倍率
+
+@export_group("❄️ 霜降 (Shuangjiang)")
+@export var shuangjiang_duration: float = 30.0
+@export var shuangjiang_growth_mult: float = 0.5        ## 作物生长速度倍率
 
 # ============================================================
-# Exported properties
+# 内部状态
 # ============================================================
-@export var term_duration: float = 120.0  # Seconds per term
+var current_term: CardEnums.SolarTerm = CardEnums.SolarTerm.NONE
+var term_timer: float = 0.0
+var _term_sequence: Array[CardEnums.SolarTerm] = []   ## [JINGZHE, NONE, MANGZHONG, NONE, SHUANGJIANG, NONE]
+var _seq_index: int = 0
+var _warned: bool = false
 
-# ============================================================
-# Signals
-# ============================================================
-signal term_changed(term_name: String)
-
-# ============================================================
-# State
-# ============================================================
-var _term_timer: float = 0.0
-var _term_index: int = 0
-var _term_cycle: Array[CardEnums.SolarTerm] = [
-	CardEnums.SolarTerm.NONE,
-	CardEnums.SolarTerm.JINGZHE,
-	CardEnums.SolarTerm.MANGZHONG,
-	CardEnums.SolarTerm.SHUANGJIANG,
-]
-
-# ============================================================
-# Lifecycle
-# ============================================================
 func _enter_tree() -> void:
 	instance = self
 
@@ -46,110 +55,189 @@ func _exit_tree() -> void:
 		instance = null
 
 func _ready() -> void:
-	current_term = CardEnums.SolarTerm.NONE
-	crop_growth_speed_modifier = 1.0
-	_term_timer = 0.0
+	_build_sequence()
+	term_timer = gap_duration  # 开局处于 "平日"，第一个节气在 gap_duration 秒后到来
+	print("[SolarTermEngine] 节气引擎就绪，首个节气 ", _term_name(_term_sequence[0]), " 将在 ", gap_duration, "s 后到来")
 
+func _build_sequence() -> void:
+	_term_sequence = [
+		CardEnums.SolarTerm.JINGZHE,
+		CardEnums.SolarTerm.NONE,
+		CardEnums.SolarTerm.MANGZHONG,
+		CardEnums.SolarTerm.NONE,
+		CardEnums.SolarTerm.SHUANGJIANG,
+		CardEnums.SolarTerm.NONE,
+	]
+
+# ============================================================
+# 主循环
+# ============================================================
 func _process(delta: float) -> void:
-	_term_timer += delta
-	if _term_timer >= term_duration:
-		_term_timer = 0.0
-		_rotate_solar_term()
+	term_timer -= delta
 
-	if current_term == CardEnums.SolarTerm.SHUANGJIANG:
-		_process_shuangjiang_frost_damage(delta)
+	# 平日 → 节气切换前 N 秒发出警告
+	if current_term == CardEnums.SolarTerm.NONE and term_timer <= warning_time and not _warned:
+		var next_term := _peek_next_term()
+		if next_term != CardEnums.SolarTerm.NONE:
+			_warned = true
+			term_warning.emit(next_term, term_timer)
+			print("[SolarTermEngine] ⚠️ ", _term_name(next_term), " 即将来临 (", snapped(term_timer, 0.1), "s)")
+
+	if term_timer <= 0.0:
+		_advance_term()
 
 # ============================================================
-# Term rotation
+# 节气切换
 # ============================================================
-func _rotate_solar_term() -> void:
-	_term_index = (_term_index + 1) % _term_cycle.size()
-	var old_term: CardEnums.SolarTerm = current_term
-	current_term = _term_cycle[_term_index]
+func _peek_next_term() -> CardEnums.SolarTerm:
+	return _term_sequence[_seq_index]
 
-	var term_name_str: String = CardEnums.SolarTerm.keys()[current_term]
-	term_changed.emit(term_name_str)
-	print("[Solar Term Engine] Term changed to: ", term_name_str)
+func _advance_term() -> void:
+	var old_term := current_term
+	var new_term := _term_sequence[_seq_index]
+	_seq_index = (_seq_index + 1) % _term_sequence.size()
 
-	# Cleanup old term
-	if old_term == CardEnums.SolarTerm.SHUANGJIANG:
-		crop_growth_speed_modifier = 1.0
+	_on_term_exit(old_term)
+	current_term = new_term
+	_on_term_enter(new_term)
+	term_timer = _get_term_duration(new_term)
+	_warned = false
 
-	# Trigger new term events
-	_trigger_term_events(current_term)
+	term_changed.emit(old_term, new_term)
+	print("[SolarTermEngine] ", _term_name(old_term), " → ", _term_name(new_term),
+		" (持续 ", _get_term_duration(new_term), "s)")
 
-func _trigger_term_events(term: CardEnums.SolarTerm) -> void:
+func _get_term_duration(term: CardEnums.SolarTerm) -> float:
 	match term:
-		CardEnums.SolarTerm.JINGZHE:
-			_trigger_jingzhe_events()
-		CardEnums.SolarTerm.MANGZHONG:
-			_trigger_mangzhong_events()
-		CardEnums.SolarTerm.SHUANGJIANG:
-			crop_growth_speed_modifier = 2.0
-			print("[Solar Term Engine] Shuangjiang active: Crop growth rate +100%")
+		CardEnums.SolarTerm.JINGZHE:    return jingzhe_duration
+		CardEnums.SolarTerm.MANGZHONG:  return mangzhong_duration
+		CardEnums.SolarTerm.SHUANGJIANG:return shuangjiang_duration
+		_:                              return gap_duration
+
+func _on_term_enter(term: CardEnums.SolarTerm) -> void:
+	match term:
+		CardEnums.SolarTerm.JINGZHE:    _trigger_jingzhe()
+		CardEnums.SolarTerm.MANGZHONG:  _trigger_mangzhong()
+		CardEnums.SolarTerm.SHUANGJIANG:_trigger_shuangjiang()
+
+func _on_term_exit(_term: CardEnums.SolarTerm) -> void:
+	pass  # 预留：清理持续效果标记
 
 # ============================================================
-# Jingzhe: spawn pests on all rice fields
+# 🐛 惊蛰：在所有有作物的地块上刷虫
 # ============================================================
-func _trigger_jingzhe_events() -> void:
-	print("[Solar Term Engine] Jingzhe active: Spawning pests on all Rice Fields!")
-	var farmlands: Array[ContainerCard] = []
-	_find_farmlands(get_tree().root, farmlands)
+func _trigger_jingzhe() -> void:
+	var terrains := _get_all_terrains()
+	var total_bugs := 0
 
-	for farmland in farmlands:
-		if farmland.card_name.contains("水稻田") or farmland.card_name.contains("Rice Field"):
-			var pest_count: int = randi_range(3, 5)
-			for i in range(pest_count):
-				var offset: Vector2 = Vector2(randf_range(-20, 20), randf_range(-20, 20))
-				if CardSpawner.instance != null:
-					CardSpawner.instance.spawn_pest_card(farmland.global_position + offset)
-			print("[Jingzhe Event] Spawned ", pest_count, " pests on ", farmland.card_name)
+	for terrain in terrains:
+		if not is_instance_valid(terrain):
+			continue
+		if not _terrain_has_crop(terrain):
+			continue
 
-# ============================================================
-# Mangzhong: drought — disable non-deep-water irrigation
-# ============================================================
-func _trigger_mangzhong_events() -> void:
-	print("[Solar Term Engine] Mangzhong active: Drought! Disabling non-DeepWaterFishPond irrigation.")
-	var containers: Array[ContainerCard] = []
-	_find_containers(get_tree().root, containers)
+		var bug_count := randi_range(jingzhe_bugs_per_field_min, jingzhe_bugs_per_field_max)
+		for _i in range(bug_count):
+			var bpos := terrain.global_position + Vector2(randf_range(-35, 35), randf_range(-35, 35))
+			if CardSpawner.instance:
+				var bug := CardSpawner.instance.spawn_card(CardEnums.CardType.BUG, "虫", bpos)
+				if bug:
+					bug.call_deferred("stack_on", terrain)
+					total_bugs += 1
 
-	for c in containers:
-		if c.type != CardEnums.CardType.DEEP_WATER_FISH_POND:
-			c.is_irrigated = false
-
-	if IrrigationManager.instance != null:
-		IrrigationManager.instance.check_irrigation_linkage()
+	print("[SolarTermEngine] 🐛 惊蛰！", total_bugs, " 只虫苏醒，袭击农田")
 
 # ============================================================
-# Shuangjiang: frost damage to exposed tropical creatures
+# 🌾 芒种：瞬间削减所有水田滋润度
 # ============================================================
-func _process_shuangjiang_frost_damage(delta: float) -> void:
-	var creatures: Array[CreatureCard] = []
-	_find_creatures(get_tree().root, creatures)
+func _trigger_mangzhong() -> void:
+	var terrains := _get_all_terrains()
+	var affected := 0
 
-	for creature in creatures:
-		if creature.card_name.contains("热带") or creature.card_name.to_lower().contains("tropical"):
-			if creature.get_container() == null:
-				print("[Frost Damage] Exposed tropical creature ", creature.card_name, " is losing health to frost!")
-				creature.health -= 10.0 * delta
+	for terrain in terrains:
+		if not is_instance_valid(terrain):
+			continue
+		if terrain.type == CardEnums.CardType.PADDY_FIELD:
+			terrain.moisture = max(0.0, terrain.moisture * (1.0 - mangzhong_moisture_drain_pct))
+			affected += 1
+
+	print("[SolarTermEngine] 🌾 芒种！", affected, " 块水田滋润度骤降，烈日灼田")
 
 # ============================================================
-# Scene tree search helpers
+# ❄️ 霜降：杀灭所有虫子
 # ============================================================
-func _find_farmlands(node: Node, farmlands: Array[ContainerCard]) -> void:
-	if node is ContainerCard and node.type == CardEnums.CardType.FARMLAND and is_instance_valid(node):
-		farmlands.append(node as ContainerCard)
-	for i in range(node.get_child_count()):
-		_find_farmlands(node.get_child(i), farmlands)
+func _trigger_shuangjiang() -> void:
+	var terrains := _get_all_terrains()
+	var bugs_killed := 0
 
-func _find_containers(node: Node, containers: Array[ContainerCard]) -> void:
-	if node is ContainerCard and is_instance_valid(node):
-		containers.append(node as ContainerCard)
-	for i in range(node.get_child_count()):
-		_find_containers(node.get_child(i), containers)
+	for terrain in terrains:
+		if not is_instance_valid(terrain):
+			continue
+		for card in terrain.get_stack_chain():
+			if card.type == CardEnums.CardType.BUG and is_instance_valid(card):
+				card.queue_free()
+				bugs_killed += 1
 
-func _find_creatures(node: Node, creatures: Array[CreatureCard]) -> void:
-	if node is CreatureCard and is_instance_valid(node):
-		creatures.append(node as CreatureCard)
-	for i in range(node.get_child_count()):
-		_find_creatures(node.get_child(i), creatures)
+	print("[SolarTermEngine] ❄️ 霜降！", bugs_killed, " 只虫冻毙，万物凝霜")
+
+# ============================================================
+# 内部辅助
+# ============================================================
+func _get_all_terrains() -> Array[TerrainCard]:
+	var im := get_node_or_null("/root/IrrigationManager") as IrrigationManager
+	if im:
+		return im.get_all_terrains()
+	return []
+
+func _terrain_has_crop(terrain: TerrainCard) -> bool:
+	for c in terrain.get_stack_chain():
+		if c.type in [CardEnums.CardType.WILD_RICE_SEED, CardEnums.CardType.WATER_CALTROP]:
+			return true
+	return false
+
+func _term_name(term: CardEnums.SolarTerm) -> String:
+	match term:
+		CardEnums.SolarTerm.JINGZHE:    return "惊蛰"
+		CardEnums.SolarTerm.MANGZHONG:  return "芒种"
+		CardEnums.SolarTerm.SHUANGJIANG:return "霜降"
+		_:                              return "平日"
+
+# ============================================================
+# 公开 API — 供 Behavior 查询以调整每帧行为
+# ============================================================
+
+## 当前作物生长倍率（霜降期间 = 0.5，其他 = 1.0）
+func get_growth_multiplier() -> float:
+	if current_term == CardEnums.SolarTerm.SHUANGJIANG:
+		return shuangjiang_growth_mult
+	return 1.0
+
+## 当前虫害自然生成概率倍率（惊蛰期间 = 2.0，其他 = 1.0）
+func get_bug_spawn_multiplier() -> float:
+	if current_term == CardEnums.SolarTerm.JINGZHE:
+		return jingzhe_bug_spawn_mult
+	return 1.0
+
+## 当前水田湿润衰减倍率（芒种期间 = 2.0，其他 = 1.0）
+func get_moisture_decay_multiplier() -> float:
+	if current_term == CardEnums.SolarTerm.MANGZHONG:
+		return mangzhong_decay_mult
+	return 1.0
+
+## 获取当前节气可读名称
+func get_current_term_name() -> String:
+	return _term_name(current_term)
+
+## 获取当前节气剩余时间（秒）
+func get_term_remaining() -> float:
+	return max(0.0, term_timer)
+
+## 当前是否为节气（非平日）
+func is_in_term() -> bool:
+	return current_term != CardEnums.SolarTerm.NONE
+
+## 返回即将到来的下一个节气（平日期间查询），若当前已是节气则返回 NONE
+func get_upcoming_term() -> CardEnums.SolarTerm:
+	if current_term != CardEnums.SolarTerm.NONE:
+		return CardEnums.SolarTerm.NONE
+	return _peek_next_term()
