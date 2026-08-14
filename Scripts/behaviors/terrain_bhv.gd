@@ -91,4 +91,9 @@ func get_growth_mult() -> float:
 		elif card.moisture >= cfg.crop_moisture_slow:   mm = 1.0
 		elif card.moisture > 0.0:                       mm = cfg.crop_growth_slow
 		else:                                           mm = 0.0
-	return max(buff_multiplier, mm)
+	var base: float = max(buff_multiplier, mm)
+	# 物质漂移：肥力达标 → 额外生长加速
+	var im := card.get_node_or_null("/root/IrrigationManager") as IrrigationManager
+	if im and im.has_fertility_bonus(card):
+		base += im.fertility_growth_bonus
+	return base

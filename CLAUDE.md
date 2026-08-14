@@ -2,7 +2,7 @@
 
 ## 1. 项目概况与角色定位
 - **项目名称**：堆叠农桑 (Stack-Agriculture)
-- **技术栈**：Godot 4.x + C# + Antigravity IDE
+- **技术栈**：Godot 4.7 + GDScript + Antigravity IDE（已从 C# 全量迁移至 GDScript）
 - **核心玩法**：基于《Stacklands》的堆叠机制，模拟中国古代"稻鱼鸭"与"桑基鱼塘"的闭环生态系统。
 - **开发原则**：**极简数值**。每张卡牌的动态属性不得超过 2 种。
 
@@ -14,6 +14,7 @@
 | **生物卡 (Bio)** | 健康值 (Health) | 进度值 (Progress) | 生长、产出、消耗资源 |
 | **资源卡 (Res)** | 强度/含量 (Intensity) | 存续时间 (Duration) | 提供养分、攻击作物、作为代谢物 |
 | **地貌卡 (Terrain)** | 承载力 (Capacity) | 滋润度 (Moisture) | 承载生物、判定生存状态 |
+| **工具卡 (Tool)** | 耐久值 (Durability) | 效率值 (Efficiency) | 劳作合成、加速生产 |
 
 ## 3. 核心子系统逻辑要求
 
@@ -49,3 +50,39 @@
 3. **捕食**：`Bio(Animal) overlaps Pest => Destroy(Pest), Animal.Progress = 0`
 4. **代谢**：`Animal.Progress >= Max => Instantiate(ExcrementCard)`
 5. **翻塘**：`Count(Excrement) > Threshold && Count(Plants) == 0 => KillAll(Fish)`
+
+## 6. 已落地的实现清单 (Implemented Systems)
+> 本节记录超出原始设计的增量实现，随开发进度更新。
+
+### 卡牌数据管线 (Card Data Pipeline)
+- **CardDef** Resource（`Scripts/card_def.gd`）→ **YARD Registry**（`cards_registry.tres`）→ **CardSpawner**（`Scripts/card_spawner.gd`）
+- 22 张卡牌的数值定义存放在 `data/cards/*.tres`，采用「字符串 ID ↔ UID」映射
+- 批量生成脚本：`tools/generate_card_tres.gd`（headless）与 `tools/generate_card_excel.py`
+
+### 集市系统 (Market) — `Scripts/market_manager.gd`
+- 出售区（拖入卖出）/ 购买面板（点击展开），内置 12 种物品价格
+- 金钱系统 `money` + 浮动通知文本
+
+### 劳作系统 (Labor) — `Scripts/labor_manager.gd`
+- 拖入卡牌按「工具 + 目标」配方合成，带进度条
+- 内置 9 种配方 + 副产品概率机制 + 工具耐久消耗
+
+### 行为树 (Beehave) — `Scripts/behaviors/`
+- `duck_bhv.gd`：鸭子的觅食 / 产蛋 / 孵化 / 吃虫 / 产粪
+- `crop_bhv.gd`：菰米 / 菱角的生长与虫害损伤
+- `terrain_bhv.gd`：水田滋润衰减 / 鱼塘产鱼 / 虫害自然生成 / 粪便增益
+
+### 节气 HUD — `Scripts/solar_term_hud.gd`
+- 顶部居中面板：节气名 + 实时倒计时 + 警告闪烁 + 切入动画
+
+### 水纹着色器 — `shaders/water_ripple_border.gdshader`
+- 地貌卡滋润度可视化 overlay
+
+### 物质漂移系统 — `Scripts/irrigation_manager.gd`
+- 上下游判定：BFS 从水源算水位梯度
+- 肥力/污染产生、单向下游扩散、自然衰减
+- 污染超标伤鱼、肥力达标促作物生长
+- 水质状态集中在管理器级字典，不占用卡牌动态属性
+
+## 7. 待实现 (Backlog)
+- **背叛机制**：无害虫且动物数 > Capacity 时，动物转攻作物/鱼苗（`duck_bhv.gd` 缺失）

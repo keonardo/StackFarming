@@ -1,5 +1,32 @@
 # 📋 代码变更日志
 
+## v0.13 — 2026-08-11 物质漂移系统（肥力/污染下游扩散）
+
+### 🌊 新增：`irrigation_manager.gd` 物质漂移
+- **上下游判定**：BFS 从水源（池塘/大水塘/鱼塘）计算水位梯度，`_water_level`（0=源头，越大越下游）
+- **肥力产生**：水田上每份粪便每秒释放 `fertility_per_feces` 肥力
+- **污染产生**：粪便超翻塘阈值（≥3）的部分产生污染
+- **单向漂移**：肥力/污染按 `drift_transfer_ratio` 比例向上游 → 下游邻居扩散，避免回流振荡
+- **自然衰减**：肥力/污染各自按 `fertility_decay`/`pollution_decay` 衰减
+- **污染伤鱼**：水域污染超过 `pollution_damage_threshold` 时鱼类每秒扣 `pollution_fish_damage`
+- 水质状态集中在管理器级字典（`_fertility`/`_pollution`），**不占用卡牌动态属性**（遵守极简双数值原则）
+
+### 🌾 接入：`terrain_bhv.gd` 生长增益
+- `get_growth_mult()` 增加肥力达标判断：`IrrigationManager.has_fertility_bonus(card)` → 额外 +`fertility_growth_bonus` 生长倍率
+
+### 📡 新增公开 API
+- `get_fertility(terrain)` / `get_pollution(terrain)` / `get_water_level(terrain)` / `has_fertility_bonus(terrain)`
+
+### 配置参数（Inspector 可调，`IrrigationManager` → 物质漂移组）
+- `drift_enabled` = true
+- `fertility_per_feces` = 1.0 / `pollution_per_feces` = 2.0
+- `fertility_decay` = 0.3 / `pollution_decay` = 0.2
+- `drift_transfer_ratio` = 0.1
+- `pollution_fish_damage` = 3.0 / `pollution_damage_threshold` = 6.0
+- `fertility_growth_bonus` = 0.5 / `fertility_bonus_threshold` = 5.0
+
+---
+
 ## v0.12.1 — 2026-07-03 水纹边框 Shader + 距离邻接判定
 
 ### 🌊 新增：`shaders/water_ripple_border.gdshader`

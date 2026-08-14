@@ -24,6 +24,18 @@ signal flow_network_changed()
 @export var eutrophication_feces_threshold: int = 3  ## 粪便数量阈值
 @export var eutrophication_warning_time: float = 10.0 ## 警告持续多久后触发翻塘
 
+@export_group("🌊 物质漂移")
+@export var drift_enabled: bool = true             ## 是否启用肥力/污染向下游漂移
+@export var fertility_per_feces: float = 1.0       ## 每份粪便每秒释放的肥力
+@export var pollution_per_feces: float = 2.0       ## 每份超标粪便每秒产生的污染
+@export var fertility_decay: float = 0.3           ## 肥力自然衰减速率（/秒）
+@export var pollution_decay: float = 0.2           ## 污染自然衰减速率（/秒）
+@export var drift_transfer_ratio: float = 0.1      ## 每秒向下游漂移的比例（当前浓度）
+@export var pollution_fish_damage: float = 3.0     ## 污染超标时鱼类每秒扣血
+@export var pollution_damage_threshold: float = 6.0 ## 污染超过此值开始伤鱼
+@export var fertility_growth_bonus: float = 0.5    ## 肥力达标时的额外生长倍率（+50%）
+@export var fertility_bonus_threshold: float = 5.0 ## 肥力超过此值触发生长加速
+
 # ============================================================
 # 内部状态
 # ============================================================
@@ -32,6 +44,11 @@ var _adjacency: Dictionary = {}                       # TerrainCard → Array[Te
 var _eutrophication_timers: Dictionary = {}           # TerrainCard → float (警告累计秒数)
 var _flow_timer: float = 0.0                          # 传导计时器
 var _dirty: bool = true                               # 下次 tick 强制重建图
+
+# ── 物质漂移状态（管理器级，不占用卡牌动态属性）──
+var _water_level: Dictionary = {}                     # TerrainCard → int（0=源头，越大越下游）
+var _fertility: Dictionary = {}                       # TerrainCard → float（肥力浓度）
+var _pollution: Dictionary = {}                       # TerrainCard → float（污染浓度）
 
 # ============================================================
 # 注册 / 注销
@@ -49,6 +66,9 @@ func unregister_terrain(terrain: TerrainCard) -> void:
 		_terrains.remove_at(idx)
 	_adjacency.erase(terrain)
 	_eutrophication_timers.erase(terrain)
+	_water_level.erase(terrain)
+	_fertility.erase(terrain)
+	_pollution.erase(terrain)
 	# 从其他卡的邻接表中移除
 	for key in _adjacency.keys():
 		var arr: Array = _adjacency[key]
@@ -66,8 +86,13 @@ func _process(delta: float) -> void:
 		_flow_timer = 0.0
 		_dirty = false
 		_rebuild_adjacency()
+		_rebuild_water_levels()
 		_process_flow(effective_delta)
 		_check_eutrophication(effective_delta)
+
+	# 物质漂移：肥力/污染持续衰减 + 产生 + 扩散
+	if drift_enabled:
+		_process_drift(delta)
 
 # ============================================================
 # 邻接图构建（基于 Area2D 空间重叠）
@@ -171,6 +196,113 @@ func _balance_paddy_pair(a: TerrainCard, b: TerrainCard, effective_delta: float)
 		moisture_flow.emit(a, b, transfer)
 
 # ============================================================
+# 物质漂移（肥力/污染向下游扩散）
+# ============================================================
+## BFS 从水源计算水位梯度：水源=0，越往下游 level 越大
+func _rebuild_water_levels() -> void:
+	_water_level.clear()
+	var frontier: Array[TerrainCard] = []
+
+	for t in _terrains:
+		if is_instance_valid(t) and t.is_water_terrain():
+			_water_level[t] = 0
+			frontier.append(t)
+
+	var visited: Dictionary = {}
+	for t in frontier:
+		visited[t] = true
+
+	while not frontier.is_empty():
+		var current: TerrainCard = frontier.pop_front()
+		var cur_level: int = _water_level.get(current, 0)
+		for nb in _get_neighbors(current):
+			if visited.has(nb):
+				continue
+			visited[nb] = true
+			_water_level[nb] = cur_level + 1
+			frontier.append(nb)
+
+## 主漂移循环：衰减 → 产生 → 扩散 → 生效
+func _process_drift(delta: float) -> void:
+	for t in _terrains:
+		if not is_instance_valid(t):
+			continue
+		# 1) 自然衰减
+		_fertility[t] = max(0.0, _fertility.get(t, 0.0) - fertility_decay * delta)
+		_pollution[t] = max(0.0, _pollution.get(t, 0.0) - pollution_decay * delta)
+
+		# 2) 粪便产生肥力 + 超标粪便产生污染
+		var feces: int = t.count_children_of_type(CardEnums.CardType.FECES)
+		if feces > 0:
+			_fertility[t] = _fertility.get(t, 0.0) + feces * fertility_per_feces * delta
+			var excess: int = max(0, feces - eutrophication_feces_threshold)
+			if excess > 0:
+				_pollution[t] = _pollution.get(t, 0.0) + excess * pollution_per_feces * delta
+
+	# 3) 单向向下游扩散（高水位 → 低水位方向，即上游 → 下游）
+	_drift_downstream(delta)
+
+	# 4) 生效：污染伤鱼、肥力促生长（生长由 crop_bhv 查询）
+	_apply_pollution_damage(delta)
+
+## 把肥力/污染按比例向下游邻居扩散（只向上→下游，避免回流振荡）
+func _drift_downstream(delta: float) -> void:
+	# 收集本帧的转移，统一结算，避免迭代顺序影响
+	var transfers: Array = []  # [{from, to, fert, poll}]
+
+	for t in _terrains:
+		if not is_instance_valid(t):
+			continue
+		var downstream := _get_downstream_neighbors(t)
+		if downstream.is_empty():
+			continue
+		var fert: float = _fertility.get(t, 0.0)
+		var poll: float = _pollution.get(t, 0.0)
+		if fert <= 0.0 and poll <= 0.0:
+			continue
+		# 总量按比例移出，均分给下游邻居
+		var share: float = 1.0 / downstream.size()
+		for nb in downstream:
+			transfers.append({
+				"from": t, "to": nb,
+				"fert": fert * drift_transfer_ratio * delta * share,
+				"poll": poll * drift_transfer_ratio * delta * share,
+			})
+
+	for tr in transfers:
+		var from_t: TerrainCard = tr["from"]
+		var to_t: TerrainCard = tr["to"]
+		var f: float = tr["fert"]
+		var p: float = tr["poll"]
+		if f > 0.0:
+			_fertility[from_t] = max(0.0, _fertility.get(from_t, 0.0) - f)
+			_fertility[to_t] = _fertility.get(to_t, 0.0) + f
+		if p > 0.0:
+			_pollution[from_t] = max(0.0, _pollution.get(from_t, 0.0) - p)
+			_pollution[to_t] = _pollution.get(to_t, 0.0) + p
+
+## 返回水位比自己高（更下游）的邻居
+func _get_downstream_neighbors(t: TerrainCard) -> Array[TerrainCard]:
+	var result: Array[TerrainCard] = []
+	var my_level: int = _water_level.get(t, 0)
+	for nb in _get_neighbors(t):
+		if _water_level.get(nb, my_level) > my_level:
+			result.append(nb)
+	return result
+
+## 污染超标 → 水域鱼类扣血
+func _apply_pollution_damage(delta: float) -> void:
+	for t in _terrains:
+		if not is_instance_valid(t) or not t.is_water_terrain():
+			continue
+		var poll: float = _pollution.get(t, 0.0)
+		if poll <= pollution_damage_threshold:
+			continue
+		for c in t.get_stack_chain():
+			if c.type == CardEnums.CardType.FISH and is_instance_valid(c):
+				c.health -= pollution_fish_damage * delta
+
+# ============================================================
 # 翻塘判定（富营养化 → 鱼全灭）
 # ============================================================
 func _check_eutrophication(effective_delta: float) -> void:
@@ -268,3 +400,23 @@ func get_flow_connections_for(terrain: TerrainCard) -> Array:
 		result.append({"from": terrain, "to": neighbor, "type": flow_type})
 
 	return result
+
+# ============================================================
+# 物质漂移公开查询 API
+# ============================================================
+
+## 地块当前肥力浓度
+func get_fertility(terrain: TerrainCard) -> float:
+	return _fertility.get(terrain, 0.0)
+
+## 地块当前污染浓度
+func get_pollution(terrain: TerrainCard) -> float:
+	return _pollution.get(terrain, 0.0)
+
+## 地块水位层级（0=水源源头，越大越下游）；未入网返回 0
+func get_water_level(terrain: TerrainCard) -> int:
+	return _water_level.get(terrain, 0)
+
+## 地块肥力是否达标（触发额外生长加速）
+func has_fertility_bonus(terrain: TerrainCard) -> bool:
+	return _fertility.get(terrain, 0.0) >= fertility_bonus_threshold

@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash(\"E:/Godot_v4.7-stable_win64.exe/Godot_v4.7-stable_win64.exe\" *)",
+      "Bash(\"E:/Godot_v4.7-stable_win64.exe/Godot_v4.7-stable_win64_console.exe\" *)",
       "Bash(gh --version)",
       "Bash(npx --version)",
       "Bash(npm list *)",
