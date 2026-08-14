@@ -13,6 +13,8 @@ extends Node
 @export var duck_eat_bug_fill: float = 40.0
 @export var duck_hatch_time: float = 45.0
 @export var duck_feces_interval: float = 45.0
+@export var duck_betrayal_interval: float = 2.0   ## 背叛攻击间隔（秒）
+@export var duck_betrayal_damage: float = 15.0    ## 背叛每次攻击伤害
 
 # ============================================================
 # 🌾 作物

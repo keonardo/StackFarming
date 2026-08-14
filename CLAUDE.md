@@ -84,5 +84,9 @@
 - 污染超标伤鱼、肥力达标促作物生长
 - 水质状态集中在管理器级字典，不占用卡牌动态属性
 
+### 背叛机制 — `Scripts/behaviors/duck_bhv.gd`
+- 地块无害虫且鸭数 > `max_ducks_per_pond` → 鸭子转攻作物种子/鱼苗
+- 作物种子扣 health，鱼苗扣 intensity（鱼是资源卡无 health）
+
 ## 7. 待实现 (Backlog)
-- **背叛机制**：无害虫且动物数 > Capacity 时，动物转攻作物/鱼苗（`duck_bhv.gd` 缺失）
+_当前无未实现的核心子系统。_

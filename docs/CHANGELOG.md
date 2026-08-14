@@ -1,5 +1,26 @@
 # 📋 代码变更日志
 
+## v0.14 — 2026-08-11 背叛机制（鸭子超载转攻作物/鱼苗）
+
+### 🦆 新增：`behaviors/duck_bhv.gd` 背叛机制
+- 触发条件：地块无害虫 **且** 鸭子数量 > `max_ducks_per_pond`（=2）
+- 攻击目标优先级：作物种子（菰米种/菱角，有 health）→ 鱼苗（鱼，用 intensity）
+- 作物种子扣 `health`，鱼苗扣 `intensity`（鱼是资源卡无 health）
+- 攻击间隔 `duck_betrayal_interval`（2s），每次伤害 `duck_betrayal_damage`（15）
+- 复用 `play_predation_animation`（位移攻击动画）+ `play_hit_animation`（受击红闪）
+- 鱼苗 intensity ≤ 0 时销毁
+
+### 配置参数（Inspector 可调，`GameConfig` → 鸭子组）
+- `duck_betrayal_interval` = 2.0
+- `duck_betrayal_damage` = 15.0
+- 复用已有 `max_ducks_per_pond` = 2（此前已定义但从未接线）
+
+### 设计说明
+- 「动物数 > Capacity」采用 `max_ducks_per_pond`（语义精确），而非通用 `capacity`（池塘=4/鱼塘=10，用它会凑 5 只鸭才触发，几乎不可达）
+- 鱼卡是 RESOURCE 无 health，故用 intensity 代理血量，intensity ≤ 0 销毁
+
+---
+
 ## v0.13 — 2026-08-11 物质漂移系统（肥力/污染下游扩散）
 
 ### 🌊 新增：`irrigation_manager.gd` 物质漂移
