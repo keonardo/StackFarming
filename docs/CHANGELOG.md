@@ -1,5 +1,82 @@
 # 📋 代码变更日志
 
+## v0.15 — 2026-08-11 移动 AI（鸭子巡逻/追虫/归巢 + 虫子爬行/追作物）
+
+### 🦆 新增：`behaviors/duck_bhv.gd` 移动状态机
+- 状态机：`IDLE`（巡逻）/ `CHASE`（追虫）/ `RETURN`（归巢）
+- **M1 鸭子空闲巡逻**：地貌范围 ±120px 随机漫步，随机转向
+- **M2 鸭子追虫**：视野 150px 内发现虫 → 120px/s 冲刺 → 接触后复用 `_check_eat_bug` 吃掉
+- **归巢**：无地貌且离最近水域 >`duck_return_threshold` → 主动游向最近水域；到达（≤90px）吸附栖水恢复 IDLE
+- 视野检测改为全局遍历 `IrrigationManager.get_all_terrains()`，突破碰撞体重叠限制
+
+### 🐛 新增：`pest_card.gd` 移动状态机
+- 状态机：`IDLE`（爬行）/ `CHASE`（追作物）
+- **M3 虫子空闲爬行**：地貌范围 ±80px 随机小步 + 偶尔停顿
+- **M4 虫子追作物**：视野 80px 内发现作物 → 60px/s 爬向 → 接触后现有虫害逻辑接管
+
+### 🔧 修改：`base_card.gd`
+- 新增 `free_move` 标志：为 true 时跳过堆叠吸附 lerp，由移动 AI 控制位置（仍维护 z_index）
+- `_find_best_stack_target` 地形根卡优先：生物栖息优先选地貌根，其次最近普通卡（避免鸭子叠鸭）
+- `_process_mutual_pushing` 豁免地形卡：地形卡不被推挤、不参与推挤（静止锚点）
+
+### 🐛 修复：鸭子归巢死循环（开局只会朝水走、靠近后停顿）
+**根因**：开局生在地貌吸附范围外 → `terrain == null` 无条件进 RETURN，且到达水域后无过渡，停在目标 4px 处。
+**修复**：RETURN 到达水域 → `stack_on` 吸附栖水 `→ IDLE`；`duck_return_threshold` 语义还原（过远才强制归巢）；无水域/目标失效→自由游。
+
+### ⚙️ 配置：`game_config.gd` 新增 13 个移动参数
+- 鸭子：`duck_idle_speed`/`duck_chase_speed`/`duck_vision_range`/`duck_terrain_boundary`/`duck_return_threshold`/`duck_terrain_clearance`
+- 虫子：`bug_idle_speed`/`bug_chase_speed`/`bug_vision_range`/`bug_terrain_boundary`/`bug_terrain_clearance`
+- 通用：`wander_turn_interval_min`/`wander_turn_interval_max`
+
+### 🐛 修复：拖动卡牌时不再带动子卡 / 不参与任何卡牌交互
+**原则**：卡牌被拖动时视为已从游戏体系取出（拿起，不在场上）。
+
+**修复**（`base_card.gd`）：
+- 拖动开始：摘除所有子卡（`_drop_stack_children`，保留子卡间相对栈关系），卡上的鸭/蛋等原地留下，不再跟随
+- 拖动结束：地形卡回归水网（`_set_drag_system_participation`）
+- 拖动中的卡不参与交互：
+  - 不是其他卡的堆叠目标（`_find_best_stack_target` 跳过 `_is_dragging`）
+  - 地形卡拖动期间退出 IrrigationManager（不供水/不邻接/不翻塘/不漂移）
+  - AI 追踪跳过被拖的地貌（鸭子不追着被拿起的池塘游，`duck_bhv.gd`/`pest_card.gd` 避障+寻水均跳过）
+
+### 🔧 调整：开局鸭子出生位置（`main.gd`）
+- (340,340) → (310,310)、(500,340) → (335,305)，两鸭都落在池塘重叠区，开局即栖水
+
+### 设计说明
+- 生物卡保持 `stack_on` 地貌（代谢逻辑依赖 `get_terrain()`），但 `free_move=true` 时位置由 AI 控制
+- 追虫/追作物是移动 AI 的 CHASE 态，接触后由现有吃虫/攻击逻辑收尾
+- 软排斥避障 `_apply_terrain_avoidance`：每帧把目标位置从非自身地貌推开，叠加移动方向形成绕行
+
+---
+
+## v0.14 — 2026-08-11 背叛机制（鸭子超载转攻作物/鱼苗）
+
+### 🦆 新增：`behaviors/duck_bhv.gd` 移动状态机
+- 状态机：`IDLE`（巡逻）/ `CHASE`（追虫）/ `RETURN`（归巢）
+- **M1 鸭子空闲巡逻**：地貌范围 ±120px 随机漫步，随机转向
+- **M2 鸭子追虫**：视野 150px 内发现虫 → 120px/s 冲刺 → 接触后复用 `_check_eat_bug` 吃掉
+- **归巢**：无地貌且离最近水域 >200px → 主动游向最近水域
+- 视野检测改为全局遍历 `IrrigationManager.get_all_terrains()`，突破碰撞体重叠限制
+
+### 🐛 新增：`pest_card.gd` 移动状态机
+- 状态机：`IDLE`（爬行）/ `CHASE`（追作物）
+- **M3 虫子空闲爬行**：地貌范围 ±80px 随机小步 + 偶尔停顿
+- **M4 虫子追作物**：视野 80px 内发现作物 → 60px/s 爬向 → 接触后现有虫害逻辑接管
+
+### 🔧 修改：`base_card.gd`
+- 新增 `free_move` 标志：为 true 时跳过堆叠吸附 lerp，由移动 AI 控制位置（仍维护 z_index）
+
+### ⚙️ 配置：`game_config.gd` 新增 11 个移动参数
+- 鸭子：`duck_idle_speed`/`duck_chase_speed`/`duck_vision_range`/`duck_terrain_boundary`/`duck_return_threshold`
+- 虫子：`bug_idle_speed`/`bug_chase_speed`/`bug_vision_range`/`bug_terrain_boundary`
+- 通用：`wander_turn_interval_min`/`wander_turn_interval_max`
+
+### 设计说明
+- 生物卡保持 `stack_on` 地貌（代谢逻辑依赖 `get_terrain()`），但 `free_move=true` 时位置由 AI 控制
+- 追虫/追作物是移动 AI 的 CHASE 态，接触后由现有吃虫/攻击逻辑收尾，不重复实现
+
+---
+
 ## v0.14 — 2026-08-11 背叛机制（鸭子超载转攻作物/鱼苗）
 
 ### 🦆 新增：`behaviors/duck_bhv.gd` 背叛机制

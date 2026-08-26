@@ -16,6 +16,14 @@ extends Node
 @export var duck_betrayal_interval: float = 2.0   ## 背叛攻击间隔（秒）
 @export var duck_betrayal_damage: float = 15.0    ## 背叛每次攻击伤害
 
+# ── 鸭子移动 AI ──
+@export var duck_idle_speed: float = 30.0         ## 空闲游速
+@export var duck_chase_speed: float = 120.0       ## 追虫冲刺速
+@export var duck_vision_range: float = 150.0      ## 发现虫的范围
+@export var duck_terrain_boundary: float = 120.0  ## 不超出地貌的距离
+@export var duck_return_threshold: float = 200.0  ## 离水域多远开始主动返回
+@export var duck_terrain_clearance: float = 70.0  ## 与地形卡的最小间距（绕行/环绕半径）
+
 # ============================================================
 # 🌾 作物
 # ============================================================
@@ -38,6 +46,13 @@ extends Node
 @export var bug_hp: float = 30.0
 @export var bug_attack: float = 5.0
 
+# ── 虫子移动 AI ──
+@export var bug_idle_speed: float = 15.0         ## 空闲爬速
+@export var bug_chase_speed: float = 60.0        ## 追作物爬速
+@export var bug_vision_range: float = 80.0       ## 发现作物的范围
+@export var bug_terrain_boundary: float = 80.0   ## 不超出地貌的距离
+@export var bug_terrain_clearance: float = 60.0  ## 与地形卡的最小间距（绕行半径）
+
 # ============================================================
 # 🗺️ 地貌
 # ============================================================
@@ -49,6 +64,10 @@ extends Node
 @export var moisture_decay: float = 2.0
 @export var fishpond_spawn_sec: float = 60.0
 @export var max_ducks_per_pond: int = 2
+
+# ── 移动 AI 通用 ──
+@export var wander_turn_interval_min: float = 1.5  ## 空闲随机转向最短间隔
+@export var wander_turn_interval_max: float = 4.0  ## 空闲随机转向最长间隔
 
 # ============================================================
 # 💩 粪便

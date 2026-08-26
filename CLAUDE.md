@@ -88,5 +88,11 @@
 - 地块无害虫且鸭数 > `max_ducks_per_pond` → 鸭子转攻作物种子/鱼苗
 - 作物种子扣 health，鱼苗扣 intensity（鱼是资源卡无 health）
 
+### 移动 AI — `Scripts/behaviors/duck_bhv.gd` + `Scripts/pest_card.gd`
+- 鸭子：IDLE 巡逻 / CHASE 追虫 / RETURN 归巢
+- 虫子：IDLE 爬行 / CHASE 追作物
+- `BaseCard.free_move` 标志跳过堆叠吸附，由 AI 控制位置
+- 视野检测走 `IrrigationManager` 全局遍历，突破碰撞体限制
+
 ## 7. 待实现 (Backlog)
 _当前无未实现的核心子系统。_

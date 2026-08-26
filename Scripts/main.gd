@@ -15,5 +15,5 @@ func _spawn_starting_cards() -> void:
 	sp.spawn_card(0, "池塘", Vector2(300, 300))
 	sp.spawn_card(3, "水田", Vector2(300, 355))
 	sp.spawn_card(20, "鱼竿", Vector2(420, 300))
-	sp.spawn_card(10, "鸭子", Vector2(340, 340))
-	sp.spawn_card(10, "鸭子", Vector2(500, 340))
+	sp.spawn_card(10, "鸭子", Vector2(310, 310))
+	sp.spawn_card(10, "鸭子", Vector2(335, 305))

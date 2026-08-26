@@ -10,6 +10,13 @@ var feces_timer: float = 0.0
 var eat_cooldown: float = 0.0
 var betrayal_timer: float = 0.0   # 背叛攻击冷却
 
+# ── 移动 AI 状态 ──
+enum MoveState { IDLE, CHASE, RETURN }
+var move_state: MoveState = MoveState.IDLE
+var _wander_dir: Vector2 = Vector2.RIGHT
+var _turn_timer: float = 0.0
+var _chase_target: BaseCard = null
+
 func _init(p_card: BaseCard, p_cfg: Node) -> void:
 	card = p_card
 	cfg = p_cfg
@@ -42,6 +49,9 @@ func process(delta: float) -> void:
 	betrayal_timer -= delta
 	if terrain != null and betrayal_timer <= 0.0:
 		_check_betrayal(terrain)
+
+	# 移动 AI
+	_process_movement(delta, terrain)
 
 func _lay_egg(_terrain: TerrainCard) -> void:
 	card.progress = 0.0
@@ -113,6 +123,144 @@ func _damage_betrayal_target(target: BaseCard) -> void:
 			target.play_hit_animation()
 			if target.intensity <= 0.0:
 				target.queue_free()
+
+# ============================================================
+# 移动 AI（M1/M2 + 归巢）
+# ============================================================
+func _process_movement(delta: float, terrain: TerrainCard) -> void:
+	# 拖拽中不抢控制权
+	if card._is_dragging:
+		return
+
+	# 1) 检测视野内是否有虫 → 追击
+	var bug := _find_nearest_bug_in_range(terrain)
+	if bug != null:
+		move_state = MoveState.CHASE
+		_chase_target = bug
+	elif move_state == MoveState.CHASE:
+		# 目标消失/离远 → 回空闲
+		move_state = MoveState.IDLE
+		_chase_target = null
+
+	# 2) 归巢判定：无地貌 → 游向最近水域；到达后吸附栖水恢复 IDLE
+	if move_state != MoveState.CHASE:
+		var water := _find_nearest_water()
+		if terrain == null:
+			if water == null or not is_instance_valid(water):
+				# 无水域可归 → 原地自由游动
+				move_state = MoveState.IDLE
+				_chase_target = null
+			elif card.global_position.distance_to(water.global_position) <= 90.0:
+				# 已到水域 → 吸附到水域栖息，恢复正常行为
+				card.call_deferred("stack_on", water)
+				move_state = MoveState.IDLE
+				_chase_target = null
+			elif card.global_position.distance_to(water.global_position) > cfg.duck_return_threshold:
+				# 离水域过远 → 主动归巢
+				move_state = MoveState.RETURN
+				_chase_target = water
+			else:
+				# 距水域不算远 → 不强制归巢，自由游动
+				move_state = MoveState.IDLE
+		else:
+			move_state = MoveState.IDLE
+
+	# 3) 按状态移动
+	match move_state:
+		MoveState.CHASE:
+			_move_towards(_chase_target.global_position, cfg.duck_chase_speed, delta)
+		MoveState.RETURN:
+			if _chase_target != null and is_instance_valid(_chase_target):
+				_move_towards(_chase_target.global_position, cfg.duck_idle_speed, delta)
+			else:
+				move_state = MoveState.IDLE
+		MoveState.IDLE:
+			_wander(terrain, cfg.duck_terrain_boundary, cfg.duck_idle_speed, delta)
+
+## 视野内找最近虫（全局遍历所有地貌卡的堆叠链）
+func _find_nearest_bug_in_range(terrain: TerrainCard) -> BaseCard:
+	var best: BaseCard = null
+	var best_dist: float = cfg.duck_vision_range
+
+	var im := card.get_node_or_null("/root/IrrigationManager") as IrrigationManager
+	if im == null:
+		return null
+
+	for t in im.get_all_terrains():
+		if not is_instance_valid(t):
+			continue
+		for c in t.get_stack_chain():
+			if c.type == CardEnums.CardType.BUG and is_instance_valid(c) and c != card:
+				var d: float = card.global_position.distance_to(c.global_position)
+				if d < best_dist:
+					best_dist = d
+					best = c
+	return best
+
+## 找最近水域地貌
+func _find_nearest_water() -> TerrainCard:
+	var im := card.get_node_or_null("/root/IrrigationManager") as IrrigationManager
+	if im == null:
+		return null
+	var best: TerrainCard = null
+	var best_dist: float = INF
+	for t in im.get_all_terrains():
+		if not is_instance_valid(t):
+			continue
+		if t.is_water_terrain() and not t._is_dragging:
+			var d: float = card.global_position.distance_to(t.global_position)
+			if d < best_dist:
+				best_dist = d
+				best = t
+	return best
+
+func _move_towards(target_pos: Vector2, speed: float, delta: float) -> void:
+	card.free_move = true
+	var dir: Vector2 = target_pos - card.global_position
+	if dir.length() > 4.0:
+		var desired: Vector2 = card.global_position + dir.normalized() * speed * delta
+		card.global_position = _apply_terrain_avoidance(desired)
+
+## 空闲巡逻：地貌范围内随机漫步，无地貌自由漂移
+func _wander(terrain: TerrainCard, boundary: float, speed: float, delta: float) -> void:
+	card.free_move = true
+	_turn_timer -= delta
+	if _turn_timer <= 0.0:
+		_turn_timer = randf_range(cfg.wander_turn_interval_min, cfg.wander_turn_interval_max)
+		_wander_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+		if _wander_dir == Vector2.ZERO:
+			_wander_dir = Vector2.RIGHT
+
+	var desired: Vector2 = card.global_position + _wander_dir * speed * delta
+	desired = _apply_terrain_avoidance(desired)
+
+	# 边界约束：有地貌则拉回范围内
+	if terrain != null and is_instance_valid(terrain):
+		var center: Vector2 = terrain.global_position
+		var offset: Vector2 = desired - center
+		if offset.length() > boundary:
+			desired = center + offset.normalized() * boundary
+
+	card.global_position = desired
+
+## 软排斥避障：将目标位置从其他地形卡推开（每帧推离叠加移动方向 → 形成绕行）
+func _apply_terrain_avoidance(desired_pos: Vector2) -> Vector2:
+	var result := desired_pos
+	var own: TerrainCard = card.get_terrain()
+	var im := card.get_node_or_null("/root/IrrigationManager") as IrrigationManager
+	if im == null:
+		return result
+	for t in im.get_all_terrains():
+		if not is_instance_valid(t) or t == own or t._is_dragging:
+			continue
+		var diff: Vector2 = result - t.global_position
+		var d: float = diff.length()
+		var clearance: float = cfg.duck_terrain_clearance
+		if d < clearance:
+			if d < 0.1:
+				diff = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+			result = t.global_position + diff.normalized() * clearance
+	return result
 
 func _can_hatch(terrain: TerrainCard) -> bool:
 	if terrain.type not in [CardEnums.CardType.BIG_POND, CardEnums.CardType.FISH_POND]: return false

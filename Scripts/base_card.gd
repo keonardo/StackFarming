@@ -114,6 +114,9 @@ var _is_dragging: bool = false
 var _drag_offset: Vector2 = Vector2.ZERO
 var _water_overlay: ColorRect = null   # 水纹着色器 overlay（仅地貌卡使用）
 
+## 自由移动标志：为 true 时跳过堆叠吸附，由移动 AI 控制位置
+var free_move: bool = false
+
 # ============================================================
 # Lifecycle
 # ============================================================
@@ -140,6 +143,12 @@ func _initialize_starting_stack() -> void:
 func _process(delta: float) -> void:
 	if _is_dragging:
 		global_position = get_global_mouse_position() - _drag_offset
+	elif free_move:
+		# 移动 AI 控制位置，跳过吸附 lerp，但仍维护 z_index
+		if stack_parent != null:
+			z_index = stack_parent.z_index + 1
+		else:
+			z_index = 0
 	elif stack_parent != null:
 		var target_pos: Vector2 = stack_parent.global_position + Vector2(0, 35)
 		global_position = global_position.lerp(target_pos, delta * 18.0)
@@ -168,12 +177,18 @@ func _process(delta: float) -> void:
 func _process_mutual_pushing(delta: float) -> void:
 	if _is_dragging or stack_parent != null:
 		return
+	# 地形卡是静止锚点，不参与推挤（不被推开，也不推别人）
+	if role == CardEnums.CardRole.TERRAIN:
+		return
 
 	for area in get_overlapping_areas():
 		if area is BaseCard and is_instance_valid(area):
 			var other_card: BaseCard = area as BaseCard
 			var other_root: BaseCard = other_card.get_stack_root()
 			if other_root != self and not other_root._is_dragging:
+				# 不推挤地形卡
+				if other_root.role == CardEnums.CardRole.TERRAIN:
+					continue
 				var diff: Vector2 = global_position - other_root.global_position
 				var dist: float = diff.length()
 				var push_threshold: float = 95.0
@@ -259,6 +274,10 @@ func _input_event(viewport: Viewport, event: InputEvent, shape_idx: int) -> void
 			z_index = 100
 			if stack_parent != null:
 				unstack()
+			# 拖动即从堆叠体系取出：摘除挂在自己身上的所有子卡（留在原位）
+			_drop_stack_children()
+			# 拖动中的地形卡退出水网（不供水/不参与邻接/翻塘/漂移）
+			_set_drag_system_participation(false)
 			get_viewport().set_input_as_handled()
 
 func _input(event: InputEvent) -> void:
@@ -266,6 +285,8 @@ func _input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 			_is_dragging = false
 			z_index = 0
+			# 拖动结束：地形卡回归水网
+			_set_drag_system_participation(true)
 
 			# Check if dropped on market UI
 			if _check_drop_on_market():
@@ -304,12 +325,18 @@ func _check_drop_on_labor() -> bool:
 # Stack target finding — skip BUG (pests don't stack)
 # ============================================================
 func _find_best_stack_target() -> BaseCard:
-	var best_target: BaseCard = null
-	var min_distance: float = 100.0
+	# 优先选择地貌根卡（生物栖息在合适地形），其次最近普通卡
+	var best_terrain: BaseCard = null
+	var terrain_dist: float = 100.0
+	var best_card: BaseCard = null
+	var card_dist: float = 100.0
 
 	for area in get_overlapping_areas():
 		if area is BaseCard and area != self and is_instance_valid(area):
 			var card: BaseCard = area as BaseCard
+			# 拖动中的卡不在游戏体系内，不能作为堆叠目标
+			if card._is_dragging:
+				continue
 			# BUGs don't participate in normal stacking
 			if card.type == CardEnums.CardType.BUG or type == CardEnums.CardType.BUG:
 				continue
@@ -323,12 +350,18 @@ func _find_best_stack_target() -> BaseCard:
 			if _is_in_our_stack_chain(card):
 				continue
 
+			var root: BaseCard = card.get_stack_root()
 			var dist: float = global_position.distance_to(card.global_position)
-			if dist < min_distance:
-				min_distance = dist
-				best_target = card
+			if root is TerrainCard:
+				# 地形根卡优先：即使要叠在其他卡上，也选所在的地貌根
+				if dist < terrain_dist:
+					terrain_dist = dist
+					best_terrain = root
+			elif dist < card_dist:
+				card_dist = dist
+				best_card = card
 
-	return best_target
+	return best_terrain if best_terrain != null else best_card
 
 func _is_in_our_stack_chain(card: BaseCard) -> bool:
 	var current: BaseCard = self
@@ -364,6 +397,35 @@ func stack_on(new_parent: BaseCard) -> void:
 
 func unstack() -> void:
 	stack_on(null)
+
+## 摘除所有直接子卡（保留子卡之间的相对栈关系），使其脱离本卡
+func _drop_stack_children() -> void:
+	if stack_child == null:
+		return
+	var first: BaseCard = stack_child
+	var child: BaseCard = first
+	while child != null:
+		var next: BaseCard = child.stack_child
+		child.stack_parent = null
+		child.stack_parent_changed.emit(self, null)
+		child = next
+	stack_child = null
+	stack_child_changed.emit(first, null)
+
+## 拖动参与度切换：地形卡在拖动期间退出水网，释放时回归
+func _set_drag_system_participation(active: bool) -> void:
+	if role != CardEnums.CardRole.TERRAIN:
+		return
+	var terrain := self as TerrainCard
+	if terrain == null:
+		return
+	var im := get_node_or_null("/root/IrrigationManager") as IrrigationManager
+	if im == null:
+		return
+	if active:
+		im.register_terrain(terrain)
+	else:
+		im.unregister_terrain(terrain)
 
 # ============================================================
 # Stack chain navigation
