@@ -34,7 +34,6 @@ const _FALLBACK := {
 	21: [15.0, 1.0],    # HOE
 	22: [20.0, 30.0],   # WATERWHEEL
 	23: [15.0, 1.0],    # COMPOST_BIN
-	24: [999.0, 0.5],   # LABORER
 }
 
 # ── card_type → string_id 映射（用于 Registry.load_entry）──
@@ -45,7 +44,7 @@ const _TYPE_TO_ID := {
 	# Creatures
 	10: "duck", 11: "wild_rice_seed", 12: "water_caltrop", 13: "bug",
 	# Tools
-	20: "fishing_rod", 21: "hoe", 22: "waterwheel", 23: "compost_bin", 24: "laborer",
+	20: "fishing_rod", 21: "hoe", 22: "waterwheel", 23: "compost_bin",
 	# Resources
 	30: "fish", 31: "duck_egg", 32: "duck_feather", 33: "wild_rice",
 	34: "caltrop", 35: "water", 36: "feces", 37: "fertilizer",

@@ -133,18 +133,8 @@ extends Node
 
 @export_group("⭐ 声望")
 @export var prestige_unlock_compost: int = 20
-@export var prestige_unlock_laborer: int = 50
 @export var prestige_tax_halve: int = 100
 @export var prestige_price_boost: int = 200
-
-# ============================================================
-# 👷 长工
-# ============================================================
-@export_group("👷 长工")
-@export var laborer_price: int = 20
-@export var laborer_speed: float = 0.5
-@export var laborer_eat_sec: float = 120.0
-@export var laborer_wage: int = 3
 
 # ============================================================
 # 🐟 鱼塘拆解：额外产鱼数量

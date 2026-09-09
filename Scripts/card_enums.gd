@@ -36,7 +36,6 @@ enum CardType {
 	HOE          = 21,  # 锄头
 	WATERWHEEL   = 22,  # 引水车
 	COMPOST_BIN  = 23,  # 堆肥箱
-	LABORER      = 24,  # 长工
 
 	# --- 资源 (30-39) ---
 	FISH          = 30,  # 鱼
@@ -85,7 +84,6 @@ static func default_name(card_type: CardType) -> String:
 		CardType.CALTROP:        return "菱角"
 		CardType.WATER:          return "水"
 		CardType.COMPOST_BIN:    return "堆肥箱"
-		CardType.LABORER:        return "长工"
 		CardType.FECES:          return "粪便"
 		CardType.FERTILIZER:     return "肥料"
 		_:                       return "未知卡牌"

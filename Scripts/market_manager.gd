@@ -29,7 +29,6 @@ const _BUILTIN_PRICES := {
 	21: {"name":"锄头","sell":-1,"buy":8},
 	22: {"name":"引水车","sell":-1,"buy":12},
 	23: {"name":"堆肥箱","sell":-1,"buy":10},
-	24: {"name":"长工","sell":-1,"buy":20},
 }
 
 func _ready() -> void:
