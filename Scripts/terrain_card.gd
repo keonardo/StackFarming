@@ -4,11 +4,22 @@ class_name TerrainCard
 
 @export var is_irrigated: bool = false
 
+## M1 地形尺寸（w×h 格），由类型查表
+var terrain_size: Vector2i = Vector2i(1, 1)
+
+const TERRAIN_SIZES := {
+	CardEnums.CardType.POND:        Vector2i(2, 2),
+	CardEnums.CardType.BIG_POND:    Vector2i(3, 2),
+	CardEnums.CardType.FISH_POND:   Vector2i(3, 3),
+	CardEnums.CardType.PADDY_FIELD: Vector2i(2, 2),
+}
+
 var _bhv: TerrainBehavior = null
 
 func _ready() -> void:
 	super._ready()
 	role = CardEnums.CardRole.TERRAIN
+	terrain_size = TERRAIN_SIZES.get(type, Vector2i(1, 1))
 	match type:
 		CardEnums.CardType.POND, CardEnums.CardType.BIG_POND, CardEnums.CardType.FISH_POND:
 			is_irrigated = true
@@ -22,6 +33,9 @@ func _ready() -> void:
 	if im:
 		im.register_terrain(self)
 
+	# M1 登记网格足迹（位置已由 spawner 设定，吸附后占格）
+	call_deferred("_setup_grid_footprint")
+
 func _process(delta: float) -> void:
 	super._process(delta)
 	if not is_instance_valid(self): return
@@ -31,6 +45,33 @@ func _exit_tree() -> void:
 	var im := get_node_or_null("/root/IrrigationManager") as IrrigationManager
 	if im:
 		im.unregister_terrain(self)
+	# M1 释放网格足迹
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if gm:
+		gm.release_terrain_footprint(self)
+
+# ── M1 网格足迹 ──
+## 吸附到网格并登记足迹（落位时调用；被占用则尝试就近空位）
+func _setup_grid_footprint() -> bool:
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if gm == null:
+		return false
+	var origin: Vector2i = gm.snap_to_cell(global_position)
+	var ok: bool = gm.register_terrain_footprint(self, terrain_size.x, terrain_size.y, origin)
+	if not ok and _is_dragging == false and stack_parent == null:
+		# 落点冲突且非拖动 → 尝试就近空位（新合成地形跳跃用法）
+		var free: Vector2i = gm.find_empty_area(origin, terrain_size.x, terrain_size.y)
+		if free != Vector2i(-1, -1):
+			gm.register_terrain_footprint(self, terrain_size.x, terrain_size.y, free)
+			global_position = gm.cell_to_world(free)
+			return true
+	return ok
+
+## 释放当前足迹（拖动/移除前调用）
+func _release_grid_footprint() -> void:
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if gm:
+		gm.release_terrain_footprint(self)
 
 func _on_stacked(stacked_card: BaseCard, _target: BaseCard) -> void:
 	if _bhv and _bhv.on_card_stacked(stacked_card): return

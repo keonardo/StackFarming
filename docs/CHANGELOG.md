@@ -1,5 +1,35 @@
 # 📋 代码变更日志
 
+## v0.18 — 2026-09-02 网格系统 + 地形占地实现（M0+M1）
+
+### 🆕 `Scripts/grid_manager.gd`（Autoload — 网格系统）
+- 全场景统一网格：格距 80×100px（与卡牌面板一致）
+- `snap_to_grid` / `world_to_cell` / `cell_to_world` 坐标换算
+- 地形足迹登记 `register_terrain_footprint`：原子互斥（试占全部格，冲突整体拒绝）
+- `find_empty_area`：螺旋外扩空位搜索（为新合成地形跳跃/产物落位预留）
+- `release_terrain_footprint`：拖动/移除时释放占地
+
+### 🗺️ `terrain_card.gd` — 地形尺寸 + 占地展开
+- 尺寸表 `TERRAIN_SIZES`（池塘 2×2 / 大水塘 3×2 / 鱼塘 3×3 / 水田 2×2）
+- `_setup_grid_footprint`：落位登记足迹；冲突自动就近空位
+- `_release_grid_footprint`：拖动/移除时释放
+- `_ready` deferred 登记 + `_exit_tree` 释放
+
+### 🃏 `base_card.gd` — 落格吸附 + 足迹钩子
+- 落格：自由放置 → `_snap_to_grid()` 吸附最近格点
+- 拖动开始：`_release_grid_footprint_hook` 释放足迹
+- 落定：`_setup_grid_footprint_hook` 重登记（地面卡专用钩子）
+
+### ⚙️ 配置
+- `project.godot`：注册 `GridManager` autoload
+
+### 修复
+- 循环依赖：GridManager 内 TerrainCard/BaseCard 类型标注改为 Node，打破编译环
+- headless 需先 `--import` 重建 .godot 缓存（新增类首次加载）
+- 验证：headless 编译 `--quit-after` 运行通过，开局池塘/水田正确占格登记
+
+---
+
 ## v0.17 — 2026-09-02 基础玩法架构重构（设计稿，未实现）
 
 > 本次为**纯设计变更**，未改代码。新增两份设计文档，重构卡牌放置/合成/劳作/动物体系。

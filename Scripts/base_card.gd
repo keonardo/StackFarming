@@ -278,6 +278,8 @@ func _input_event(viewport: Viewport, event: InputEvent, shape_idx: int) -> void
 			_drop_stack_children()
 			# 拖动中的地形卡退出水网（不供水/不参与邻接/翻塘/漂移）
 			_set_drag_system_participation(false)
+			# M1 拖动中的地形卡释放网格足迹（腾出占地）
+			_release_grid_footprint_hook()
 			get_viewport().set_input_as_handled()
 
 func _input(event: InputEvent) -> void:
@@ -302,6 +304,13 @@ func _input(event: InputEvent) -> void:
 			var target: BaseCard = _find_best_stack_target()
 			if target != null:
 				stack_on(target)
+				# M1 叠到目标上的地形卡也登记足迹（落定位置）
+				_setup_grid_footprint_hook()
+			else:
+				# 自由放置 → 吸附最近网格格点（M0 网格系统）
+				_snap_to_grid()
+				# M1 地形卡自由落位重新登记占地（冲突则就近空位）
+				_setup_grid_footprint_hook()
 			get_viewport().set_input_as_handled()
 
 # ============================================================
@@ -370,6 +379,27 @@ func _is_in_our_stack_chain(card: BaseCard) -> bool:
 			return true
 		current = current.stack_child
 	return false
+
+## M0 网格吸附：自由放置时对齐最近格点（拖动释放调用）
+func _snap_to_grid() -> void:
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if gm == null:
+		return
+	global_position = gm.snap_to_grid(global_position)
+
+## M1 钩子：拖动开始释放地形足迹（地形卡由 TerrainCard 覆盖实现）
+func _release_grid_footprint_hook() -> void:
+	if role == CardEnums.CardRole.TERRAIN:
+		var t := self as TerrainCard
+		if t:
+			t._release_grid_footprint()
+
+## M1 钩子：落定时重新登记地形足迹（冲突则就近空位）
+func _setup_grid_footprint_hook() -> void:
+	if role == CardEnums.CardRole.TERRAIN:
+		var t := self as TerrainCard
+		if t:
+			t._setup_grid_footprint()
 
 # ============================================================
 # Stack / Unstack

@@ -21,6 +21,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 [autoload]
 
 GameConfig="res://Scripts/game_config.gd"
+GridManager="res://Scripts/grid_manager.gd"
 IrrigationManager="res://Scripts/irrigation_manager.gd"
 SolarTermEngine="res://Scripts/solar_term_engine.gd"
 MCPGameBridge="res://addons/godot_mcp/game_bridge/mcp_game_bridge.gd"
