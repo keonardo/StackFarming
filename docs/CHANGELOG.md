@@ -8,7 +8,7 @@
 
 **修复**：`base_card.gd stack_on` —— `_child_target_pos = _resolve_child_position(...)` 同步赋值。
 
-**验证**：新增 `tools/test_stack_position.gd`（headless 场景构造测试，覆盖容器堆叠/普通堆叠/多内容物铺格），9/9 断言通过。
+**验证**：临时 headless 场景构造测试（容器堆叠/普通堆叠/多内容物铺格），9/9 断言通过后已删除测试脚本，不留遗留文件。
 
 ---
 
