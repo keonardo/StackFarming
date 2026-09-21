@@ -1,5 +1,17 @@
 # 📋 代码变更日志
 
+## v0.18.1 — 2026-09-22 修复：卡牌漂回原点（_child_target_pos 未赋值）
+
+**现象**：卡牌偶尔回 (0,0)、有偏移。
+
+**根因**：`stack_on` 里只更新 `global_position`，未同步 `_child_target_pos`（保持默认 ZERO）。`_process` 吸附循环 `target_pos = _child_target_pos` → 普通叠放（非地形成父卡）每帧 lerp 到 (0,0)。容器叠放因走动态重取分支不受影响，故「仅普通叠放漂移」。
+
+**修复**：`base_card.gd stack_on` —— `_child_target_pos = _resolve_child_position(...)` 同步赋值。
+
+**验证**：新增 `tools/test_stack_position.gd`（headless 场景构造测试，覆盖容器堆叠/普通堆叠/多内容物铺格），9/9 断言通过。
+
+---
+
 ## v0.18 — 2026-09-02 网格系统 + 地形占地实现（M0+M1）
 
 ### 🆕 `Scripts/grid_manager.gd`（Autoload — 网格系统）

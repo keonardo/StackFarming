@@ -117,6 +117,9 @@ var _water_overlay: ColorRect = null   # 水纹着色器 overlay（仅地貌卡�
 ## 自由移动标志：为 true 时跳过堆叠吸附，由移动 AI 控制位置
 var free_move: bool = false
 
+## 堆叠吸附目标位（stack_on 时解析；容器铺格/默认+35）
+var _child_target_pos: Vector2 = Vector2.ZERO
+
 # ============================================================
 # Lifecycle
 # ============================================================
@@ -150,7 +153,12 @@ func _process(delta: float) -> void:
 		else:
 			z_index = 0
 	elif stack_parent != null:
-		var target_pos: Vector2 = stack_parent.global_position + Vector2(0, 35)
+		var target_pos: Vector2 = _child_target_pos
+		if stack_parent is TerrainCard:
+			# 容器内容物：吸附到已分配的格位（若格位被释放则回退默认）
+			var t := stack_parent as TerrainCard
+			if t.has_method("claim_content") and t._slot_owner.has(self):
+				target_pos = t.get_child_stack_position(self)
 		global_position = global_position.lerp(target_pos, delta * 18.0)
 		z_index = stack_parent.z_index + 1
 	else:
@@ -412,18 +420,49 @@ func stack_on(new_parent: BaseCard) -> void:
 	if stack_parent != null:
 		stack_parent.stack_child = null
 		stack_parent.stack_child_changed.emit(self, null)
+		# M2 移出父容器 → 释放格位
+		_release_container_slot(old_parent)
 
 	stack_parent = new_parent
 	if new_parent != null:
+		# M2 容器判定：
+		#  - 地形×地形堆叠 = 合成路径，直接放行（不占容器格）
+		#  - 非地形卡×地形成容器 = 需 can_accept_content，拒绝则取消
+		var terrain_parent := new_parent as TerrainCard
+		var self_is_terrain: bool = role == CardEnums.CardRole.TERRAIN
+		if terrain_parent != null and not self_is_terrain and not terrain_parent.can_accept_content(self):
+			# 工具拖到地形上=双手劳作目标（后续 M3），此处仅拒绝为纯堆叠
+			stack_parent = null
+			return
 		if new_parent.stack_child != null and new_parent.stack_child != self:
 			new_parent.stack_child.unstack()
 		new_parent.stack_child = self
 		new_parent.stack_child_changed.emit(null, self)
 		new_parent.on_card_stacked.emit(self, new_parent)
-		global_position = new_parent.global_position + Vector2(0, 35)
+		# 关键：同时赋值目标位，避免 _process 每帧 lerp 到默认 ZERO
+		_child_target_pos = _resolve_child_position(new_parent)
+		global_position = _child_target_pos
 		_play_stack_animation(new_parent)
 
 	stack_parent_changed.emit(old_parent, new_parent)
+
+## M2 新位置解析：父卡为容器 → 铺格；否则默认 +35 偏移
+func _resolve_child_position(parent: BaseCard) -> Vector2:
+	if parent is TerrainCard:
+		# 地形×地形：合成路径，不占容器格，直接默认偏移
+		if role == CardEnums.CardRole.TERRAIN:
+			return parent.global_position + Vector2(0, 35)
+		var t := parent as TerrainCard
+		if t.has_method("get_child_stack_position"):
+			return t.get_child_stack_position(self)
+	return parent.global_position + Vector2(0, 35)
+
+## M2 释放在容器中占的格位（继承调用时，若父是地形容器）
+func _release_container_slot(parent: BaseCard) -> void:
+	if parent is TerrainCard:
+		var t := parent as TerrainCard
+		if t.has_method("release_content"):
+			t.release_content(self)
 
 func unstack() -> void:
 	stack_on(null)
@@ -436,6 +475,9 @@ func _drop_stack_children() -> void:
 	var child: BaseCard = first
 	while child != null:
 		var next: BaseCard = child.stack_child
+		# M2 释放子卡在容器中占的格位
+		if self is TerrainCard:
+			child._release_container_slot(self)
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)
 		child = next
@@ -487,6 +529,8 @@ func _unstack_and_remove() -> void:
 	if parent != null:
 		parent.stack_child = null
 		parent.stack_child_changed.emit(self, null)
+		# M2 释放本卡在原容器中占的格位
+		_release_container_slot(parent)
 	if child != null:
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)
@@ -573,6 +617,8 @@ func _spawn_replacement(replacement_type: CardEnums.CardType, replacement_name: 
 	if parent != null:
 		parent.stack_child = null
 		parent.stack_child_changed.emit(self, null)
+		# M2 释放本卡在原容器中占的格位
+		_release_container_slot(parent)
 	if child != null:
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)
@@ -638,6 +684,8 @@ func _detach_and_free() -> void:
 	if parent != null:
 		parent.stack_child = null
 		parent.stack_child_changed.emit(self, null)
+		# M2 释放本卡在原容器中占的格位
+		_release_container_slot(parent)
 	if child != null:
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)
