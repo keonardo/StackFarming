@@ -1,5 +1,33 @@
 # 📋 代码变更日志
 
+## v0.19 — 2026-09-23 容器/栈关系系统重构（依总纲，去补丁化）
+
+> 依据 `docs/容器栈关系总纲.md` 做结构化重构：栈与容器从「共用 stack_parent 猜分支」改为「两套独立关系」。
+> 验证：headless 用例 13/13 通过（见总纲 §9）。
+
+### 🧱 核心变更
+- **新增 `container_parent` 字段**（base_card）：容器归属专用引用，与 `stack_parent` 完全分离（总纲 §3）
+- **`stack_on` 纯栈化**：只操作 stack_parent/child 单链，不再 if 容器/栈两分支（总纲 §8）
+- **新增 `enter_container` / `_leave_container`**：纯容器进/出，统一释放格位+恢复全尺寸（总纲 §4）
+- **新增 `_detach_all_relations`**：销毁前统一脱离两套关系（总纲 §6 铁律）
+- **`_process` 三态分路**：自由/容器内容物/栈子卡 各自独立吸附逻辑
+- **`get_terrain()` 优先容器**：容器归属 > 栈根（总纲 §5）
+- **`get_contents()`**：TerrainCard 内容物遍历辅助（新）；`get_stack_chain` 保留行为兼容桥
+- **拖拽/释放路由**：非地形卡→地形成容器；地形×地形→栈合成；拖拽开始→`_detach_all_relations`
+- **`_spawn_replacement`**：继承容器归属（替代物进原容器而非丢到栈）
+
+### 🧹 删除的旧补丁
+- `_release_container_slot` / `get_child_stack_position` / `_resolve_child_position` / `_drop_stack_children` 的容器分支
+- `stack_on` 内的容器分支（不再混用）
+
+### ✅ 验收（headless 断言）
+1. 入容器成功，container_parent 设置，stack_parent 为空 ✅
+2. 多内容物铺格不同（slots=2, 位置各异）✅
+3. 拖池塘松手到蛋上 → 不叠成栈 ✅
+4. 离开容器 → 归属清空+格位释放+恢复全尺寸 ✅
+
+---
+
 ## v0.18.2 — 2026-09-22 拖拽崩溃修复 + 容器视觉 + UI 重排
 
 ### 🐛 修复：拖动池塘/内容物时崩溃

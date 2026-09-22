@@ -167,36 +167,51 @@ func _check_stack_recipes() -> void:
 			_merge_fish_pond()
 
 func _merge_pond(second: BaseCard) -> void:
-	var pos: Vector2 = global_position; var kids: Array = []
-	for c in get_stack_chain():
-		if c != self and c != second: kids.append(c)
+	var pos: Vector2 = global_position
+	# 收集两个地形的内容物（_slot_owner），统一脱离后并入新地形
+	var kids: Array = []
+	kids.append_array(get_contents())
+	if second is TerrainCard:
+		kids.append_array((second as TerrainCard).get_contents())
+	# 脱离栈关系（self/second 之间）
+	if stack_parent != null:
+		_detach_from_parent(stack_parent)
+	if second.stack_parent != null:
+		second._detach_from_parent(second.stack_parent)
+	# 内容物全部脱离（容器+栈）
 	for c in kids:
 		if is_instance_valid(c):
-			c.stack_parent = null
-			c._release_container_slot(self)
-	second.stack_parent = null
-	second._release_container_slot(self)
-	release_content(second)
-	second.queue_free(); queue_free()
+			c._detach_all_relations()
+	second.queue_free()
+	queue_free()
 	if CardSpawner.instance:
 		var bp: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.BIG_POND, "大水塘", pos)
-		if bp: for c in kids: c.call_deferred("stack_on", bp)
+		if bp:
+			for c in kids:
+				if is_instance_valid(c):
+					c.call_deferred("enter_container", bp as TerrainCard)
 
 func _merge_fish_pond() -> void:
-	var pos: Vector2 = global_position; var fish_ate: int = 0; var kids: Array = []
-	for c in get_stack_chain():
-		if c != self:
-			if c.type == CardEnums.CardType.FISH and fish_ate < 2:
-				fish_ate += 1; c.queue_free()
-			else: kids.append(c)
+	var pos: Vector2 = global_position
+	var fish_ate: int = 0; var kids: Array = []
+	for c in get_contents():
+		if c.type == CardEnums.CardType.FISH and fish_ate < 2:
+			fish_ate += 1; c.queue_free()
+		elif is_instance_valid(c):
+			kids.append(c)
+	# 脱离栈关系 + 内容物脱离
+	if stack_parent != null:
+		_detach_from_parent(stack_parent)
 	for c in kids:
 		if is_instance_valid(c):
-			c.stack_parent = null
-			c._release_container_slot(self)
+			c._detach_all_relations()
 	queue_free()
 	if CardSpawner.instance:
 		var fp: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.FISH_POND, "鱼塘", pos)
-		if fp: for c in kids: c.call_deferred("stack_on", fp)
+		if fp:
+			for c in kids:
+				if is_instance_valid(c):
+					c.call_deferred("enter_container", fp as TerrainCard)
 
 ## 内容物进入容器的通知（承接 region 的 on_card_stacked 信号链路）
 func notify_content_added(card: BaseCard) -> void:
@@ -206,24 +221,35 @@ func notify_content_added(card: BaseCard) -> void:
 	call_deferred("_check_stack_recipes")
 
 ## 覆写：容器链 = self + 所有格位内容物（每个内容物自身可继续叠子链）
+## 注：总纲 §5 —— 这是行为兼容桥，栈语义在 BaseCard.get_stack_chain 保留
 func get_stack_chain() -> Array[BaseCard]:
 	var chain: Array[BaseCard] = [self]
+	chain.append_array(get_contents())
+	# 栈子卡（如待合成的第二个地形）
+	var sc: BaseCard = stack_child
+	while sc != null:
+		chain.append(sc)
+		sc = sc.stack_child
+	return chain
+
+## 返回所有容器内容物（含内容物的栈子链），不含 self
+func get_contents() -> Array[BaseCard]:
+	var result: Array[BaseCard] = []
 	for card in _slot_owner.keys():
 		if card == null or not is_instance_valid(card):
 			continue
-		chain.append(card)
-		# 内容物自己的子链（如叠在内容物上的额外卡）
+		result.append(card)
 		var sub: BaseCard = card.stack_child
 		while sub != null:
-			chain.append(sub)
+			result.append(sub)
 			sub = sub.stack_child
-	return chain
+	return result
 
-## 地形合成时：内容物全部跌落为浮动（M4 起），当前直接放逐回自由卡
+## 地形合成/销毁时：内容物全部脱离（统一走 _detach_all_relations）
 func _drop_all_contents() -> void:
 	for card in _slot_owner.keys():
 		if card != null and is_instance_valid(card):
-			card.unstack()
+			card._detach_all_relations()
 	_slots.clear()
 	_slot_owner.clear()
 
@@ -308,13 +334,11 @@ func _slot_world_pos(rel: Vector2i) -> Vector2:
 	var origin: Vector2i = gm.snap_to_cell(global_position)
 	return gm.cell_to_world(origin + rel)
 
-## M2：父卡位置计算——容器内铺格；非容器返回默认 +35 偏移
-func get_child_stack_position(card: BaseCard) -> Vector2:
-	var p := claim_content(card, card.global_position)
-	if p == Vector2.INF:
-		# 容器满 → 退回默认偏移（不会实际叠放，调用方会处理）
-		return global_position + Vector2(0, 35)
-	return p
+## M2：内容物在容器中的铺格位置（总纲 §3，与 get_child_stack_position 无关）
+func get_content_position(card: BaseCard) -> Vector2:
+	if _slot_owner.has(card):
+		return _slot_world_pos(_slot_owner[card])
+	return global_position + Vector2(0, 35)
 
 # ── Queries ──
 func count_children_of_type(wanted: int) -> int:
