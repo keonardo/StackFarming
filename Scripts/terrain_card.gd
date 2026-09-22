@@ -26,6 +26,7 @@ func _ready() -> void:
 	super._ready()
 	role = CardEnums.CardRole.TERRAIN
 	terrain_size = TERRAIN_SIZES.get(type, Vector2i(1, 1))
+	_resize_visual(terrain_size)
 	match type:
 		CardEnums.CardType.POND, CardEnums.CardType.BIG_POND, CardEnums.CardType.FISH_POND:
 			is_irrigated = true
@@ -41,6 +42,77 @@ func _ready() -> void:
 
 	# M1 登记网格足迹（位置已由 spawner 设定，吸附后占格）
 	call_deferred("_setup_grid_footprint")
+
+## 按地形尺寸展开视觉：Panel 放大为容器表面 + 底色 + 格线 + 标签重摆
+func _resize_visual(sz: Vector2i) -> void:
+	var w_px := sz.x * 80.0
+	var h_px := sz.y * 100.0
+
+	# Panel 放大为地形背景
+	var panel := get_node_or_null("Panel") as Control
+	if panel:
+		panel.offset_left = -w_px * 0.5
+		panel.offset_top = -h_px * 0.5
+		panel.offset_right = w_px * 0.5
+		panel.offset_bottom = h_px * 0.5
+		# 容器表面底色（水域蓝 / 农田绿等）
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = _container_tint()
+		sb.set_corner_radius_all(8)
+		sb.border_color = Color(1, 1, 1, 0.25)
+		sb.set_border_width_all(2)
+		panel.add_theme_stylebox_override("panel", sb)
+
+	# Collision 放大（容器接收放置判定）
+	var shape_node := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape_node and shape_node.shape is RectangleShape2D:
+		(shape_node.shape as RectangleShape2D).size = Vector2(w_px, h_px)
+
+	# 标签重摆到容器顶栏（不随格子拉伸）
+	_layout_labels(panel, w_px)
+
+	# 画格线
+	queue_redraw()
+
+## 地形底色：按水域/农田着色
+func _container_tint() -> Color:
+	match type:
+		CardEnums.CardType.POND, CardEnums.CardType.BIG_POND, CardEnums.CardType.FISH_POND:
+			return Color(0.12, 0.35, 0.75, 0.35)
+		CardEnums.CardType.PADDY_FIELD:
+			return Color(0.35, 0.55, 0.20, 0.30)
+		_:
+			return Color(0.5, 0.45, 0.30, 0.30)
+
+## 标签集中到容器顶部
+func _layout_labels(panel: Control, w_px: float) -> void:
+	if panel == null:
+		return
+	var name_lbl := panel.get_node_or_null("NameLabel") as Label
+	if name_lbl:
+		name_lbl.offset_left = 6
+		name_lbl.offset_right = w_px - 6
+		name_lbl.offset_top = 4
+		name_lbl.offset_bottom = 26
+
+## M2 容器格线绘制：容器边缘实线 + 内部格线虚线
+func _draw() -> void:
+	var sz := terrain_size
+	if sz.x <= 0 or sz.y <= 0:
+		return
+	var w := sz.x * 80.0
+	var h := sz.y * 100.0
+	var o := Vector2(-w * 0.5, -h * 0.5)
+
+	# 内部格线（浅灰，隐约表现棋盘格）
+	var line := Color(1, 1, 1, 0.10)
+	for x in range(1, sz.x):
+		draw_line(o + Vector2(x * 80.0, 0), o + Vector2(x * 80.0, h), line, 1.5)
+	for y in range(1, sz.y):
+		draw_line(o + Vector2(0, y * 100.0), o + Vector2(w, y * 100.0), line, 1.5)
+
+	# 容器边缘强调框
+	draw_rect(Rect2(o, Vector2(w, h)), Color(1, 1, 1, 0.18), false, 2.0)
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -99,7 +171,12 @@ func _merge_pond(second: BaseCard) -> void:
 	for c in get_stack_chain():
 		if c != self and c != second: kids.append(c)
 	for c in kids:
-		if is_instance_valid(c): c.stack_parent = null
+		if is_instance_valid(c):
+			c.stack_parent = null
+			c._release_container_slot(self)
+	second.stack_parent = null
+	second._release_container_slot(self)
+	release_content(second)
 	second.queue_free(); queue_free()
 	if CardSpawner.instance:
 		var bp: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.BIG_POND, "大水塘", pos)
@@ -112,11 +189,43 @@ func _merge_fish_pond() -> void:
 			if c.type == CardEnums.CardType.FISH and fish_ate < 2:
 				fish_ate += 1; c.queue_free()
 			else: kids.append(c)
-	for c in kids: c.stack_parent = null
+	for c in kids:
+		if is_instance_valid(c):
+			c.stack_parent = null
+			c._release_container_slot(self)
 	queue_free()
 	if CardSpawner.instance:
 		var fp: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.FISH_POND, "鱼塘", pos)
 		if fp: for c in kids: c.call_deferred("stack_on", fp)
+
+## 内容物进入容器的通知（承接 region 的 on_card_stacked 信号链路）
+func notify_content_added(card: BaseCard) -> void:
+	# 触发 on_card_stacked，供 terrain_bhv 处理（粪便/水/肥料叠上水田等）
+	on_card_stacked.emit(card, self)
+	# 触发堆叠配方检查（如池塘+什么呢，供未来扩展）
+	call_deferred("_check_stack_recipes")
+
+## 覆写：容器链 = self + 所有格位内容物（每个内容物自身可继续叠子链）
+func get_stack_chain() -> Array[BaseCard]:
+	var chain: Array[BaseCard] = [self]
+	for card in _slot_owner.keys():
+		if card == null or not is_instance_valid(card):
+			continue
+		chain.append(card)
+		# 内容物自己的子链（如叠在内容物上的额外卡）
+		var sub: BaseCard = card.stack_child
+		while sub != null:
+			chain.append(sub)
+			sub = sub.stack_child
+	return chain
+
+## 地形合成时：内容物全部跌落为浮动（M4 起），当前直接放逐回自由卡
+func _drop_all_contents() -> void:
+	for card in _slot_owner.keys():
+		if card != null and is_instance_valid(card):
+			card.unstack()
+	_slots.clear()
+	_slot_owner.clear()
 
 ## 当前内容物数量
 func _content_count() -> int:
@@ -169,6 +278,7 @@ func claim_content(card: BaseCard, hint_pos: Vector2) -> Vector2:
 
 	_slots[best] = card
 	_slot_owner[card] = best
+	_apply_content_visual(card, true)
 	return _slot_world_pos(best)
 
 ## 释放卡占用的格（取出/移除时）
@@ -178,6 +288,18 @@ func release_content(card: BaseCard) -> void:
 	var rel: Vector2i = _slot_owner[card]
 	_slots.erase(rel)
 	_slot_owner.erase(card)
+	_apply_content_visual(card, false)
+
+## 容器内容物视觉：缩略显示（占格时缩到格内），取出恢复全尺寸
+func _apply_content_visual(card: BaseCard, in_container: bool) -> void:
+	if card == null or not is_instance_valid(card):
+		return
+	if in_container:
+		card.scale = Vector2(0.55, 0.55)
+		card.z_index = z_index + 1
+	else:
+		card.scale = Vector2.ONE
+		card.z_index = z_index + 1
 
 func _slot_world_pos(rel: Vector2i) -> Vector2:
 	var gm := get_node_or_null("/root/GridManager") as GridManager

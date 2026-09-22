@@ -50,7 +50,8 @@ func _setup_market() -> void:
 	_money_label.add_theme_font_size_override("font_size", 22)
 	add_child(_money_label)
 
-	var sell_pos := Vector2(vp_size.x * 0.5, 36.0)
+	# 市场移到左下角，避免与顶部 SolarTermHUD 重叠
+	var sell_pos := Vector2(120.0, vp_size.y - 44.0)
 	var sell_size := Vector2(160, 48)
 
 	_sell_zone = _make_zone("SellZone", sell_pos, sell_size, Color(0.1, 0.3, 0.1, 0.85))
@@ -85,7 +86,7 @@ func _setup_market() -> void:
 
 	_buy_panel = Panel.new()
 	_buy_panel.name = "BuyPanel"
-	_buy_panel.position = Vector2(vp_size.x - 220, 60)
+	_buy_panel.position = buy_pos + Vector2(-90, -60 - 180)
 	_buy_panel.size = Vector2(200, 180)
 	_buy_panel.visible = false
 	_buy_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -102,8 +103,8 @@ func _setup_market() -> void:
 	_build_buy_list()
 
 	_notification_label = Label.new()
-	_notification_label.position = Vector2(vp_size.x * 0.3, 80)
-	_notification_label.size = Vector2(vp_size.x * 0.4, 36)
+	_notification_label.position = Vector2(vp_size.x * 0.5 - 200, 90)
+	_notification_label.size = Vector2(400, 36)
 	_notification_label.add_theme_font_size_override("font_size", 18)
 	_notification_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.0))
 	_notification_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

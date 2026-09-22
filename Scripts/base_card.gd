@@ -152,7 +152,7 @@ func _process(delta: float) -> void:
 			z_index = stack_parent.z_index + 1
 		else:
 			z_index = 0
-	elif stack_parent != null:
+	elif stack_parent != null and is_instance_valid(stack_parent):
 		var target_pos: Vector2 = _child_target_pos
 		if stack_parent is TerrainCard:
 			# 容器内容物：吸附到已分配的格位（若格位被释放则回退默认）
@@ -274,10 +274,22 @@ func _update_visuals() -> void:
 # ============================================================
 # Input handling — drag & drop
 # ============================================================
+## 全局拖拽锁：同一时刻只允许一张卡被拖拽
+static var _drag_lock: BaseCard = null
+
 func _input_event(viewport: Viewport, event: InputEvent, shape_idx: int) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
+			# 若已有卡在拖拽（含本卡自己），忽略后续按下——最多一张卡跟手
+			if _drag_lock != null:
+				# 锁可能指向已 free 的卡：校验后清理，避免永久锁死
+				if not is_instance_valid(_drag_lock):
+					_drag_lock = null
+				else:
+					get_viewport().set_input_as_handled()
+					return
 			_is_dragging = true
+			_drag_lock = self
 			_drag_offset = get_global_mouse_position() - global_position
 			z_index = 100
 			if stack_parent != null:
@@ -294,6 +306,7 @@ func _input(event: InputEvent) -> void:
 	if _is_dragging and event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 			_is_dragging = false
+			_drag_lock = null
 			z_index = 0
 			# 拖动结束：地形卡回归水网
 			_set_drag_system_participation(true)
@@ -342,9 +355,14 @@ func _check_drop_on_labor() -> bool:
 # Stack target finding — skip BUG (pests don't stack)
 # ============================================================
 func _find_best_stack_target() -> BaseCard:
-	# 优先选择地貌根卡（生物栖息在合适地形），其次最近普通卡
-	var best_terrain: BaseCard = null
-	var terrain_dist: float = 100.0
+	# 地形卡只找地形卡叠放（合成路径），绝不找普通卡/内容物
+	# —— 否则会叠到容器内容物上造成链错乱崩溃
+	if role == CardEnums.CardRole.TERRAIN:
+		return _find_terrain_stack_target()
+
+	# 非地形卡：优先选地形成容器（铺格），其次最近普通卡
+	var best_terrain: TerrainCard = null
+	var terrain_dist: float = 200.0
 	var best_card: BaseCard = null
 	var card_dist: float = 100.0
 
@@ -355,7 +373,7 @@ func _find_best_stack_target() -> BaseCard:
 			if card._is_dragging:
 				continue
 			# BUGs don't participate in normal stacking
-			if card.type == CardEnums.CardType.BUG or type == CardEnums.CardType.BUG:
+			if card.type == CardEnums.CardType.BUG:
 				continue
 			# TOOLs don't stack
 			if card.role == CardEnums.CardRole.TOOL:
@@ -367,18 +385,35 @@ func _find_best_stack_target() -> BaseCard:
 			if _is_in_our_stack_chain(card):
 				continue
 
-			var root: BaseCard = card.get_stack_root()
 			var dist: float = global_position.distance_to(card.global_position)
-			if root is TerrainCard:
-				# 地形根卡优先：即使要叠在其他卡上，也选所在的地貌根
+			if card is TerrainCard:
+				# 地形容器优先
 				if dist < terrain_dist:
 					terrain_dist = dist
-					best_terrain = root
+					best_terrain = card as TerrainCard
 			elif dist < card_dist:
 				card_dist = dist
 				best_card = card
 
 	return best_terrain if best_terrain != null else best_card
+
+# 地形卡专用：只找可合成的地形（含容器内容物铺格被否决的场景）
+func _find_terrain_stack_target() -> BaseCard:
+	var best: BaseCard = null
+	var best_dist: float = 200.0
+	for area in get_overlapping_areas():
+		if area is BaseCard and area != self and is_instance_valid(area):
+			var card: BaseCard = area as BaseCard
+			if card._is_dragging:
+				continue
+			if card.type == CardEnums.CardType.BUG:
+				continue
+			if card is TerrainCard:
+				var dist: float = global_position.distance_to(card.global_position)
+				if dist < best_dist:
+					best_dist = dist
+					best = card
+	return best
 
 func _is_in_our_stack_chain(card: BaseCard) -> bool:
 	var current: BaseCard = self
@@ -418,31 +453,41 @@ func stack_on(new_parent: BaseCard) -> void:
 
 	var old_parent: BaseCard = stack_parent
 	if stack_parent != null:
-		stack_parent.stack_child = null
-		stack_parent.stack_child_changed.emit(self, null)
-		# M2 移出父容器 → 释放格位
-		_release_container_slot(old_parent)
+		# M2 移出父容器 → 释放格位（容器内容物不进 stack_child 链，不碰它的链）
+		if old_parent is TerrainCard:
+			_release_container_slot(old_parent)
+		else:
+			old_parent.stack_child = null
+			old_parent.stack_child_changed.emit(self, null)
 
 	stack_parent = new_parent
 	if new_parent != null:
-		# M2 容器判定：
-		#  - 地形×地形堆叠 = 合成路径，直接放行（不占容器格）
-		#  - 非地形卡×地形成容器 = 需 can_accept_content，拒绝则取消
 		var terrain_parent := new_parent as TerrainCard
 		var self_is_terrain: bool = role == CardEnums.CardRole.TERRAIN
-		if terrain_parent != null and not self_is_terrain and not terrain_parent.can_accept_content(self):
-			# 工具拖到地形上=双手劳作目标（后续 M3），此处仅拒绝为纯堆叠
-			stack_parent = null
-			return
-		if new_parent.stack_child != null and new_parent.stack_child != self:
-			new_parent.stack_child.unstack()
-		new_parent.stack_child = self
-		new_parent.stack_child_changed.emit(null, self)
-		new_parent.on_card_stacked.emit(self, new_parent)
-		# 关键：同时赋值目标位，避免 _process 每帧 lerp 到默认 ZERO
-		_child_target_pos = _resolve_child_position(new_parent)
-		global_position = _child_target_pos
-		_play_stack_animation(new_parent)
+
+		if terrain_parent != null and not self_is_terrain:
+			# ── M2 容器分支：多内容物进容器，不走单链 ──
+			if not terrain_parent.can_accept_content(self):
+				stack_parent = null
+				return
+			_child_target_pos = terrain_parent.claim_content(self, get_global_mouse_position())
+			if _child_target_pos == Vector2.INF:
+				stack_parent = null
+				return
+			global_position = _child_target_pos
+			# 不设置 parent.stack_child —— 内容物由容器 _slot_owner 管理
+			terrain_parent.notify_content_added(self)
+			_play_stack_animation(new_parent)
+		else:
+			# ── 普通/地形堆叠：维持单链 ──
+			if new_parent.stack_child != null and new_parent.stack_child != self:
+				new_parent.stack_child.unstack()
+			new_parent.stack_child = self
+			new_parent.stack_child_changed.emit(null, self)
+			# 关键：同时赋值目标位，避免 _process 每帧 lerp 到默认 ZERO
+			_child_target_pos = _resolve_child_position(new_parent)
+			global_position = _child_target_pos
+			_play_stack_animation(new_parent)
 
 	stack_parent_changed.emit(old_parent, new_parent)
 
@@ -527,14 +572,21 @@ func _unstack_and_remove() -> void:
 	var child: BaseCard = stack_child
 
 	if parent != null:
-		parent.stack_child = null
-		parent.stack_child_changed.emit(self, null)
-		# M2 释放本卡在原容器中占的格位
-		_release_container_slot(parent)
+		_detach_from_parent(parent)
 	if child != null:
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)
 	queue_free()
+
+## M2 统一脱离父卡：容器父卡仅释放格位；普通父卡清 stack_child 单链
+func _detach_from_parent(parent: BaseCard) -> void:
+	if parent == null:
+		return
+	if parent is TerrainCard:
+		_release_container_slot(parent)
+	else:
+		parent.stack_child = null
+		parent.stack_child_changed.emit(self, null)
 
 # ============================================================
 # Animation hooks
@@ -615,10 +667,7 @@ func _spawn_replacement(replacement_type: CardEnums.CardType, replacement_name: 
 	var child: BaseCard = stack_child
 
 	if parent != null:
-		parent.stack_child = null
-		parent.stack_child_changed.emit(self, null)
-		# M2 释放本卡在原容器中占的格位
-		_release_container_slot(parent)
+		_detach_from_parent(parent)
 	if child != null:
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)
@@ -682,10 +731,7 @@ func _detach_and_free() -> void:
 	var child: BaseCard = stack_child
 
 	if parent != null:
-		parent.stack_child = null
-		parent.stack_child_changed.emit(self, null)
-		# M2 释放本卡在原容器中占的格位
-		_release_container_slot(parent)
+		_detach_from_parent(parent)
 	if child != null:
 		child.stack_parent = null
 		child.stack_parent_changed.emit(self, null)

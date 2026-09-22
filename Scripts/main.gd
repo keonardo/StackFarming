@@ -12,8 +12,9 @@ func _spawn_starting_cards() -> void:
 	var sp := CardSpawner.instance
 	if not sp: return
 
-	sp.spawn_card(0, "池塘", Vector2(300, 300))
-	sp.spawn_card(3, "水田", Vector2(300, 355))
-	sp.spawn_card(20, "鱼竿", Vector2(420, 300))
-	sp.spawn_card(10, "鸭子", Vector2(310, 310))
-	sp.spawn_card(10, "鸭子", Vector2(335, 305))
+	# 布局：地形卡 2×2（160×200）错开网格摆放，避免放大后重叠
+	sp.spawn_card(3, "水田", Vector2(320, 300))    # 左上 农田
+	sp.spawn_card(0, "池塘", Vector2(600, 300))    # 居中 水域
+	sp.spawn_card(10, "鸭子", Vector2(600, 270))   # 池塘内
+	sp.spawn_card(10, "鸭子", Vector2(640, 310))   # 池塘内
+	sp.spawn_card(20, "鱼竿", Vector2(920, 300))   # 右侧 工具
