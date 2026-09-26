@@ -142,7 +142,7 @@ func _trigger_jingzhe() -> void:
 			if CardSpawner.instance:
 				var bug := CardSpawner.instance.spawn_card(CardEnums.CardType.BUG, "虫", bpos)
 				if bug:
-					bug.call_deferred("stack_on", terrain)
+					bug.call_deferred("attach_to", terrain)
 					total_bugs += 1
 
 	print("[SolarTermEngine] 🐛 惊蛰！", total_bugs, " 只虫苏醒，袭击农田")

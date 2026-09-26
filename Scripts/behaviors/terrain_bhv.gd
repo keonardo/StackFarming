@@ -32,7 +32,7 @@ func process(delta: float) -> void:
 					var fpos: Vector2 = card.global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
 					if CardSpawner.instance:
 						var fish: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.FISH, "鱼", fpos)
-						if fish: fish.call_deferred("stack_on", card)
+						if fish: fish.call_deferred("attach_to", card)
 	_tick_timers(delta)
 	if _has_crop(): _process_bugs(delta)
 
@@ -64,7 +64,7 @@ func _process_bugs(delta: float) -> void:
 			var bpos: Vector2 = card.global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
 			if CardSpawner.instance:
 				var bug: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.BUG, "虫", bpos)
-				if bug: bug.call_deferred("stack_on", card)
+				if bug: bug.call_deferred("attach_to", card)
 
 func on_card_stacked(sc: BaseCard) -> bool:
 	if card.type != CardEnums.CardType.PADDY_FIELD: return false

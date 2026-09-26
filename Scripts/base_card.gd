@@ -148,10 +148,18 @@ func _apply_font_recursive(node: Node) -> void:
 		_apply_font_recursive(node.get_child(i))
 
 func _initialize_starting_stack() -> void:
-	if stack_parent == null:
-		var target: BaseCard = _find_best_stack_target()
-		if target != null:
-			stack_on(target)
+	# 初始化落位 —— 明确三态分流（总纲 §4/§6）：
+	#   * 我是自由卡，附近有地形 → 看情况：地形×地形=合成入栈；非地形×地形=进容器
+	#   * 附近有普通卡 → 入栈
+	if stack_parent != null:
+		return
+	var target: BaseCard = _find_best_stack_target()
+	if target == null:
+		return
+	if target is TerrainCard and role != CardEnums.CardRole.TERRAIN:
+		enter_container(target as TerrainCard)
+	else:
+		stack_on(target)
 
 func _process(delta: float) -> void:
 	if _is_dragging:
@@ -513,6 +521,17 @@ func stack_on(new_parent: BaseCard) -> void:
 
 func unstack() -> void:
 	stack_on(null)
+
+## 高层挂载入口（总纲 §6 转移矩阵）：自由 → 目标态
+## 目标为地形成容器 → enter_container；否则 → stack_on（栈）
+## 供行为脚本/AI 调用，避免它们误用 stack_on 往地形上挂
+func attach_to(target: BaseCard) -> bool:
+	if target == null or not is_instance_valid(target):
+		return false
+	if target is TerrainCard and role != CardEnums.CardRole.TERRAIN:
+		return enter_container(target as TerrainCard)
+	stack_on(target)
+	return true
 
 ## 纯容器：进入地形成容器（铺格，不走单链）
 ## 成功返回 true；被拒/满返回 false

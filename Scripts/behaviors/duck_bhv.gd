@@ -151,8 +151,8 @@ func _process_movement(delta: float, terrain: TerrainCard) -> void:
 				move_state = MoveState.IDLE
 				_chase_target = null
 			elif card.global_position.distance_to(water.global_position) <= 90.0:
-				# 已到水域 → 吸附到水域栖息，恢复正常行为
-				card.call_deferred("stack_on", water)
+				# 已到水域 → 吸附到水域栖息（容器），恢复正常行为
+				card.call_deferred("attach_to", water)
 				move_state = MoveState.IDLE
 				_chase_target = null
 			elif card.global_position.distance_to(water.global_position) > cfg.duck_return_threshold:
