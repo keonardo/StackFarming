@@ -134,7 +134,7 @@ func _setup_grid_footprint() -> bool:
 	var gm := get_node_or_null("/root/GridManager") as GridManager
 	if gm == null:
 		return false
-	var origin: Vector2i = gm.snap_to_cell(global_position)
+	var origin: Vector2i = _origin_cell()
 	var ok: bool = gm.register_terrain_footprint(self, terrain_size.x, terrain_size.y, origin)
 	if not ok and _is_dragging == false and stack_parent == null:
 		# 落点冲突且非拖动 → 尝试就近空位（新合成地形跳跃用法）
@@ -285,7 +285,8 @@ func claim_content(card: BaseCard, hint_pos: Vector2) -> Vector2:
 	var gm := get_node_or_null("/root/GridManager") as GridManager
 	if gm == null:
 		return Vector2.INF
-	var origin: Vector2i = gm.snap_to_cell(global_position)
+	# 搜索起点与落位同源：左上格（origin），只用一组真值，避免中心/左上漂移
+	var origin: Vector2i = _origin_cell()
 
 	var best: Vector2i = Vector2i(-1, -1)
 	var best_dist := INF
@@ -294,7 +295,7 @@ func claim_content(card: BaseCard, hint_pos: Vector2) -> Vector2:
 			var rel := Vector2i(x, y)
 			if _slots.has(rel):
 				continue
-			var slot_world: Vector2 = gm.cell_to_world(origin + rel)
+			var slot_world: Vector2 = gm.cell_to_world(origin + rel) + Vector2(GridManager.CELL_W * 0.5, GridManager.CELL_H * 0.5)
 			var d := hint_pos.distance_to(slot_world)
 			if d < best_dist:
 				best = rel
@@ -331,14 +332,41 @@ func _slot_world_pos(rel: Vector2i) -> Vector2:
 	var gm := get_node_or_null("/root/GridManager") as GridManager
 	if gm == null:
 		return global_position
-	var origin: Vector2i = gm.snap_to_cell(global_position)
-	return gm.cell_to_world(origin + rel)
+	var origin: Vector2i = _origin_cell()
+	# cell_to_world 返回格左上角；内容物卡中心应停在格中心 → +半格
+	var w := GridManager.CELL_W
+	var h := GridManager.CELL_H
+	return gm.cell_to_world(origin + rel) + Vector2(w * 0.5, h * 0.5)
 
-## M2：内容物在容器中的铺格位置（总纲 §3，与 get_child_stack_position 无关）
+## 面板左上角对应的格（单一真值源 = GridManager 已登记的足迹）
+## global_position 是面板中心；足迹 rect.position 即地形覆盖的最左上格
+func _origin_cell() -> Vector2i:
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if gm == null:
+		return Vector2i.ZERO
+	# 已登记足迹 → 直接用它（登记后与 _setup_grid_footprint 一致）
+	var rect := gm.get_footprint(self)
+	if rect.size != Vector2i.ZERO:
+		return rect.position
+	# 未登记（如测试瞬建）→ 按中心减半窗推算左上角格
+	var w := GridManager.CELL_W
+	var h := GridManager.CELL_H
+	return Vector2i(
+		floori((global_position.x - terrain_size.x * 0.5 * w) / w),
+		floori((global_position.y - terrain_size.y * 0.5 * h) / h)
+	)
+
+## M2：内容物在容器中的铺格位置（总纲 §3）
+## 铁律：内容物一律落在棋盘格上；没有格位时回退左上格整数对齐，绝不回容器中心
 func get_content_position(card: BaseCard) -> Vector2:
 	if _slot_owner.has(card):
 		return _slot_world_pos(_slot_owner[card])
-	return global_position + Vector2(0, 35)
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if gm == null:
+		return global_position
+	# 异常兜底：左上格中心（仍是棋盘格，非容器中心）
+	var origin: Vector2i = _origin_cell()
+	return gm.cell_to_world(origin) + Vector2(GridManager.CELL_W * 0.5, GridManager.CELL_H * 0.5)
 
 # ── Queries ──
 func count_children_of_type(wanted: int) -> int:

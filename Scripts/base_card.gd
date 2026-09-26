@@ -124,6 +124,9 @@ var free_move: bool = false
 ## 堆叠吸附目标位（stack_on 时解析；容器铺格/默认+35）
 var _child_target_pos: Vector2 = Vector2.ZERO
 
+## 容器拖拽跟随偏移：容器被拖时内容物保持相对位置（不吸格）
+var _container_follow_offset: Vector2 = Vector2.ZERO
+
 # ============================================================
 # Lifecycle
 # ============================================================
@@ -154,9 +157,14 @@ func _process(delta: float) -> void:
 		# 移动 AI 控制位置，跳过吸附 lerp，但仍维护 z_index
 		z_index = container_parent.z_index + 1 if container_parent != null else (stack_parent.z_index + 1 if stack_parent != null else 0)
 	elif container_parent != null and is_instance_valid(container_parent):
-		# 容器内容物：吸附到已分配的格位（跟随容器）
+		# 容器内容物
 		var t := container_parent
-		if t.has_method("get_content_position") and t._slot_owner.has(self):
+		if t._is_dragging:
+			# 容器正在被拖：跟随（保持相对偏移，不被吸入格位）
+			global_position = t.global_position + _container_follow_offset
+			z_index = t.z_index + 1
+		elif t.has_method("get_content_position") and t._slot_owner.has(self):
+			# 容器静止：吸附到自己格位
 			var target_pos: Vector2 = t.get_content_position(self)
 			global_position = global_position.lerp(target_pos, delta * 18.0)
 			z_index = t.z_index + 1
@@ -512,6 +520,7 @@ func enter_container(terrain: TerrainCard) -> bool:
 	container_parent = terrain
 	global_position = pos
 	_child_target_pos = pos
+	_container_follow_offset = pos - terrain.global_position
 	terrain.notify_content_added(self)
 	_play_stack_animation(terrain)
 	return true
@@ -523,6 +532,7 @@ func _leave_container() -> void:
 	if is_instance_valid(container_parent):
 		container_parent.release_content(self)
 	container_parent = null
+	_container_follow_offset = Vector2.ZERO
 	scale = Vector2.ONE
 
 ## 销毁前统一脱离全部关系（总纲 §6 铁律）
