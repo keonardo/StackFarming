@@ -40,8 +40,8 @@ func _ready() -> void:
 	if im:
 		im.register_terrain(self)
 
-	# M1 登记网格足迹（位置已由 spawner 设定，吸附后占格）
-	call_deferred("_setup_grid_footprint")
+	# M1 登记网格足迹（位置已由 spawner 设定；初始冲突走跳跃语义，不是拖动回弹）
+	call_deferred("_setup_grid_footprint", false)
 
 ## 按地形尺寸展开视觉：Panel 放大为容器表面 + 底色 + 格线 + 标签重摆
 func _resize_visual(sz: Vector2i) -> void:
@@ -129,21 +129,36 @@ func _exit_tree() -> void:
 		gm.release_terrain_footprint(self)
 
 # ── M1 网格足迹 ──
-## 吸附到网格并登记足迹（落位时调用；被占用则尝试就近空位）
-func _setup_grid_footprint() -> bool:
+## 登记足迹。拖拽落位(is_drag_placement=true)冲突 → 回弹原位（禁止重叠）；
+## 合成跳跃(false)冲突 → 就近空位展开。返回是否成功落地
+func _setup_grid_footprint(is_drag_placement: bool = true) -> bool:
 	var gm := get_node_or_null("/root/GridManager") as GridManager
 	if gm == null:
 		return false
 	var origin: Vector2i = _origin_cell()
 	var ok: bool = gm.register_terrain_footprint(self, terrain_size.x, terrain_size.y, origin)
-	if not ok and _is_dragging == false and stack_parent == null:
-		# 落点冲突且非拖动 → 尝试就近空位（新合成地形跳跃用法）
+
+	if not ok:
+		if is_drag_placement:
+			# 玩家拖动落位：格被占用 → 直接回弹原位，不允许重叠
+			_rollback_to_pre_drag()
+			return false
+		# 新合成地形跳跃：就近找空位展开
 		var free: Vector2i = gm.find_empty_area(origin, terrain_size.x, terrain_size.y)
 		if free != Vector2i(-1, -1):
 			gm.register_terrain_footprint(self, terrain_size.x, terrain_size.y, free)
 			global_position = gm.cell_to_world(free)
 			return true
 	return ok
+
+## 回弹到拖动前位置（含足迹重登记；若原位不可用则放弃）
+func _rollback_to_pre_drag() -> void:
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if gm == null:
+		return
+	global_position = _pre_drag_pos
+	var origin: Vector2i = _origin_cell()
+	gm.register_terrain_footprint(self, terrain_size.x, terrain_size.y, origin)
 
 ## 释放当前足迹（拖动/移除前调用）
 func _release_grid_footprint() -> void:

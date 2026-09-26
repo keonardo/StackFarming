@@ -1,25 +1,32 @@
 # 📋 代码变更日志
 
-## v0.19.1 — 2026-09-26 修复：容器内容物落位锚定（铁律：绝不回容器中心）
+## v0.19.1 — 2026-09-26 修复：容器互斥 + 落位锚定
 
-**背景**：用户明确规则 —— **容器 = 棋盘格的一部分，附着在容器上的卡牌必须遵循棋盘格排布，任何情况下不得回到容器（面板）中心点。**
+**背景**：用户明确规则 —— ① 容器 = 棋盘格的一部分，附着卡牌遵循棋盘格排布，绝不回容器中心；② 容器相互之间不可重叠。
 
-**根因**（两处交叉 bug）：
-1. `claim_content` 搜索起点用 `gm.snap_to_cell(global_position)`（容器**中心**格），而落位 `_slot_world_pos` 用 `_origin_cell()`（**左上**格）→ 两处 origin 不一致，搜索到的格与最终落位错位
-2. `get_content_position` 兜底返回 `global_position + Vector2(0, 35)` → 无格位时内容物**回到容器中心**
+### 修复一：容器相互重叠
+**根因**：`_find_terrain_stack_target` 返回**任意重叠地形** → 拖池塘到水田上会 `stack_on(水田)` 挂成子卡（视觉重叠 + 足迹登记被跳过）。且 `_setup_grid_footprint` 冲突后若空位搜索失败，地形留在冲突位置（足迹未登记但视觉重叠）。
 
 **修复**：
-- `claim_content` 搜索起点统一用 `_origin_cell()`（与落位同源），格位计算单点真值
-- `get_content_position` 兜底改为「左上格中心」——仍是棋盘格，绝不回容器中心
-- `_origin_cell()`：优先取 GridManager 已登记 footprint 的 `rect.position`（单一真值源）；未登记时按「面板中心 - 地形半窗」推算左上格
+- `_find_terrain_stack_target` 只返回「有合成配方」的地形（POND+POND），无配方 → 落自由网格（足迹互斥强制）
+- 新增 `_can_merge_terrain_with()`：配方白名单（当前仅 池塘+池塘→大水塘）
+- `_setup_grid_footprint(is_drag_placement)`：区分两种冲突——
+  - **拖动落位（true）**：冲突 → `_rollback_to_pre_drag()` 回弹原位
+  - **合成跳跃（false）**：冲突 → `find_empty_area` 就近展开
+- 拖动开始记录 `_pre_drag_pos`，冲突回弹用
+- `_ready` 初始登记走合成跳跃语义（非拖动回弹，避免 `_pre_drag_pos=ZERO` 回弹到原点）
 
-**铁律验证（headless）**：容器放在非整数格 (331.7, 253.2)，4 张蛋从不同 hint 放入 →
-- 4 张全部进容器 ✅
-- 各自精确落在 4 个棋盘格中心（280,150 / 360,150 / 280,250 / 360,250）✅
-- 全部 `fmod(格)=40,50` 对齐格中心 ✅
-- 无一张落在容器中心 ✅
+**验证（headless）**：pond2 从空闲格拖到 pond1 上方 → 落位失败、回弹到起点、起点重新登记成功、两足迹互斥（4/4 ✔）。
 
-**行为**：拖拽容器中 → 内容物跟随容器相对偏移；容器静止 → 各自吸附棋盘格；异常兜底 → 左上格（非中心）。
+### 修复二：容器内容物落位锚定（铁律：绝不回容器中心）
+**根因**：`claim_content` 搜索起点用容器中心格、落位用左上格 → 两处 origin 错位；`get_content_position` 兜底返回 `global_position+(0,35)` → 内容物回容器中心。
+
+**修复**：
+- `claim_content` 搜索起点统一 `_origin_cell()`（与落位同源）
+- `get_content_position` 兜底改「左上格中心」（仍是棋盘格）
+- `_origin_cell()`：单一真值源，已登记 footprint 优先
+
+**验证（headless）**：容器放非整数格，4 蛋各自落在 4 棋盘格中心，无一张回容器中心（11/11 ✔）。
 
 ---
 

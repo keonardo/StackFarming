@@ -127,6 +127,9 @@ var _child_target_pos: Vector2 = Vector2.ZERO
 ## 容器拖拽跟随偏移：容器被拖时内容物保持相对位置（不吸格）
 var _container_follow_offset: Vector2 = Vector2.ZERO
 
+## 拖动前位置（落位冲突时回弹用）
+var _pre_drag_pos: Vector2 = Vector2.ZERO
+
 # ============================================================
 # Lifecycle
 # ============================================================
@@ -305,6 +308,8 @@ func _input_event(viewport: Viewport, event: InputEvent, shape_idx: int) -> void
 			_is_dragging = true
 			_drag_lock = self
 			_drag_offset = get_global_mouse_position() - global_position
+			# 记录拖动前位置（冲突回弹用）
+			_pre_drag_pos = global_position
 			z_index = 100
 			# 拖动即取出：脱离所有父子关系（容器内容物/栈子卡都还原为自由卡）
 			_detach_all_relations()
@@ -414,7 +419,7 @@ func _find_best_stack_target() -> BaseCard:
 
 	return best_terrain if best_terrain != null else best_card
 
-# 地形卡专用：只找可合成的地形（含容器内容物铺格被否决的场景）
+# 地形卡专用：只找「可合成」的地形（有配方才叠），否则返回 null（落自由网格）
 func _find_terrain_stack_target() -> BaseCard:
 	var best: BaseCard = null
 	var best_dist: float = 200.0
@@ -425,12 +430,22 @@ func _find_terrain_stack_target() -> BaseCard:
 				continue
 			if card.type == CardEnums.CardType.BUG:
 				continue
-			if card is TerrainCard:
+			if card is TerrainCard and _can_merge_terrain_with(card):
 				var dist: float = global_position.distance_to(card.global_position)
 				if dist < best_dist:
 					best_dist = dist
 					best = card
 	return best
+
+## 是否与目标地形有已知地形合成配方（无配方 → 不该叠放，落自由网格互斥）
+func _can_merge_terrain_with(other: BaseCard) -> bool:
+	if other == null or not is_instance_valid(other):
+		return false
+	# 池塘 + 池塘 → 大水塘
+	if type == CardEnums.CardType.POND and other.type == CardEnums.CardType.POND:
+		return true
+	# （后续新配方在此扩展：大水塘+鱼→鱼塘是内容物配方，不走地形叠放）
+	return false
 
 func _is_in_our_stack_chain(card: BaseCard) -> bool:
 	var current: BaseCard = self
@@ -447,19 +462,20 @@ func _snap_to_grid() -> void:
 		return
 	global_position = gm.snap_to_grid(global_position)
 
-## M1 钩子：拖动开始释放地形足迹（地形卡由 TerrainCard 覆盖实现）
+## M1 钩子：释放地形足迹（拖起时调用）
 func _release_grid_footprint_hook() -> void:
 	if role == CardEnums.CardRole.TERRAIN:
 		var t := self as TerrainCard
 		if t:
 			t._release_grid_footprint()
 
-## M1 钩子：落定时重新登记地形足迹（冲突则就近空位）
-func _setup_grid_footprint_hook() -> void:
+## M1 钩子：落定时重新登记地形足迹
+## is_drag_placement=true 表示玩家拖动落位（冲突应回弹原位）；false=合成跳跃（冲突找空位）
+func _setup_grid_footprint_hook(is_drag_placement: bool = true) -> void:
 	if role == CardEnums.CardRole.TERRAIN:
 		var t := self as TerrainCard
 		if t:
-			t._setup_grid_footprint()
+			t._setup_grid_footprint(is_drag_placement)
 
 # ============================================================
 # Stack / Container（总纲 §3、§4、§6）
