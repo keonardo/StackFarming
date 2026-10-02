@@ -1,5 +1,23 @@
 # 📋 代码变更日志
 
+## v0.19.4 — 2026-09-27 拖拽落位棋盘格视觉提示
+
+**背景**：用户反馈拖动卡牌（含容器）时应有棋盘格预览，让玩家清楚落位目标。
+
+**新增** `Scripts/drag_preview.gd`（DragPreview autoload）：
+- 独立绘制层（z_index 1000，非交互），只显示拖拽落位提示框
+- 地形卡：半透明绿框（可放置）/ 红框（冲突）覆盖 w×h 格，多格时内部画格线，显示占几格
+- 普通卡：单格绿框提示落位格中心
+
+**接线** `base_card.gd` / `grid_manager.gd`：
+- `_input_event` 拖起 → `_show_drag_preview`；`_process` 每帧 → `_queue_redraw_drag_preview`（按角色推算目标格 + `can_fit` 冲突判定）；`_input` 松手 → `_hide_drag_preview`
+- `GridManager.can_fit(origin,w,h)` 公开冲突查询（供预览用）
+- `project.godot` 注册 DragPreview autoload
+
+**验证**：预览坐标推算正确 —— 腾出占地后 `can_fit=true`、重新占地后 `can_fit=false`（3/3 ✔）。编译+运行零错误。
+
+---
+
 ## v0.19.3 — 2026-09-27 坐标语义统一：容器棋盘格与全局棋盘对齐
 
 **背景**：用户反馈「容器的棋盘格和游戏整体棋盘格没对上，容器中心点落在游戏棋盘格中心」。根因是坐标语义自相矛盾 —— `cell_to_world` 返回格**左上角**，但卡牌 `global_position` 当**面板中心**用，两者错半格。

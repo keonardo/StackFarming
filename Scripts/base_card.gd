@@ -164,6 +164,8 @@ func _initialize_starting_stack() -> void:
 func _process(delta: float) -> void:
 	if _is_dragging:
 		global_position = get_global_mouse_position() - _drag_offset
+		# 拖拽落位预览：每帧刷新目标格与合法性
+		_queue_redraw_drag_preview()
 	elif free_move:
 		# 移动 AI 控制位置，跳过吸附 lerp，但仍维护 z_index
 		z_index = container_parent.z_index + 1 if container_parent != null else (stack_parent.z_index + 1 if stack_parent != null else 0)
@@ -325,6 +327,8 @@ func _input_event(viewport: Viewport, event: InputEvent, shape_idx: int) -> void
 			_set_drag_system_participation(false)
 			# M1 拖动中的地形卡释放网格足迹（腾出占地）
 			_release_grid_footprint_hook()
+			# 拖拽落位预览：显示目标棋盘格
+			_show_drag_preview()
 			get_viewport().set_input_as_handled()
 
 func _input(event: InputEvent) -> void:
@@ -333,6 +337,8 @@ func _input(event: InputEvent) -> void:
 			_is_dragging = false
 			_drag_lock = null
 			z_index = 0
+			# 拖动结束：隐藏落位预览
+			_hide_drag_preview()
 			# 拖动结束：地形卡回归水网
 			_set_drag_system_participation(true)
 
@@ -488,6 +494,42 @@ func _setup_grid_footprint_hook(is_drag_placement: bool = true) -> void:
 		var t := self as TerrainCard
 		if t:
 			t._setup_grid_footprint(is_drag_placement)
+
+# ============================================================
+# Drag preview（落位棋盘格视觉提示）
+# ============================================================
+func _show_drag_preview() -> void:
+	var dp := get_node_or_null("/root/DragPreview") as DragPreview
+	if dp == null:
+		return
+	# 拖起即展示，具体位置由 _process 每帧刷新
+	_queue_redraw_drag_preview()
+
+func _hide_drag_preview() -> void:
+	var dp := get_node_or_null("/root/DragPreview") as DragPreview
+	if dp:
+		dp.hide_preview()
+
+## 拖动中每帧刷新预览：按角色推算落位格（地形=顶点矩形；普通=格中心单格）
+func _queue_redraw_drag_preview() -> void:
+	var dp := get_node_or_null("/root/DragPreview") as DragPreview
+	var gm := get_node_or_null("/root/GridManager") as GridManager
+	if dp == null or gm == null:
+		return
+
+	if role == CardEnums.CardRole.TERRAIN:
+		# 地形：吸附到最近顶点 → 左上角格 + 覆盖 w×h
+		var vertex := gm.snap_to_vertex(global_position)
+		var origin := gm.world_to_cell(vertex)
+		var t := self as TerrainCard
+		var sz := t.terrain_size if t else Vector2i(1, 1)
+		var valid := gm.can_fit(origin, sz.x, sz.y)
+		dp.show_preview(origin, sz, valid)
+	else:
+		# 普通卡：吸附到最近格中心 → 单格
+		var center := gm.snap_to_grid(global_position)
+		var origin := gm.world_to_cell(center)
+		dp.show_preview(origin, Vector2i(1, 1), true)
 
 # ============================================================
 # Stack / Container（总纲 §3、§4、§6）

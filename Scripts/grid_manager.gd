@@ -50,6 +50,14 @@ func snap_to_vertex(pos: Vector2) -> Vector2:
 func snap_to_cell(pos: Vector2) -> Vector2i:
 	return world_to_cell(pos)
 
+## 查询指定格子范围能否放置（无其他地形占用）——供拖拽预览
+func can_fit(origin: Vector2i, w: int, h: int) -> bool:
+	for x in range(origin.x, origin.x + w):
+		for y in range(origin.y, origin.y + h):
+			if _cell_owner.has(Vector2i(x, y)):
+				return false
+	return true
+
 # ============================================================
 # 地形足迹登记 / 注销
 # ============================================================
