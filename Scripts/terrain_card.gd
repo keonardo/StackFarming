@@ -43,18 +43,18 @@ func _ready() -> void:
 	# M1 登记网格足迹（位置已由 spawner 设定；初始冲突走跳跃语义，不是拖动回弹）
 	call_deferred("_setup_grid_footprint", false)
 
-## 按地形尺寸展开视觉：Panel 放大为容器表面 + 底色 + 格线 + 标签重摆
+## 按地形尺寸展开视觉：Panel 从左上角顶点向右下展开（与全局棋盘格求重合）
 func _resize_visual(sz: Vector2i) -> void:
 	var w_px := sz.x * 80.0
 	var h_px := sz.y * 100.0
 
-	# Panel 放大为地形背景
+	# Panel = 容器表面，从 (0,0) 覆盖到 (w_px, h_px)
 	var panel := get_node_or_null("Panel") as Control
 	if panel:
-		panel.offset_left = -w_px * 0.5
-		panel.offset_top = -h_px * 0.5
-		panel.offset_right = w_px * 0.5
-		panel.offset_bottom = h_px * 0.5
+		panel.offset_left = 0
+		panel.offset_top = 0
+		panel.offset_right = w_px
+		panel.offset_bottom = h_px
 		# 容器表面底色（水域蓝 / 农田绿等）
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = _container_tint()
@@ -63,10 +63,11 @@ func _resize_visual(sz: Vector2i) -> void:
 		sb.set_border_width_all(2)
 		panel.add_theme_stylebox_override("panel", sb)
 
-	# Collision 放大（容器接收放置判定）
+	# Collision 放大：节点锚点 = 左上顶点，shape 平移到面板中心对齐
 	var shape_node := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if shape_node and shape_node.shape is RectangleShape2D:
 		(shape_node.shape as RectangleShape2D).size = Vector2(w_px, h_px)
+		shape_node.position = Vector2(w_px * 0.5, h_px * 0.5)
 
 	# 标签重摆到容器顶栏（不随格子拉伸）
 	_layout_labels(panel, w_px)
@@ -95,14 +96,14 @@ func _layout_labels(panel: Control, w_px: float) -> void:
 		name_lbl.offset_top = 4
 		name_lbl.offset_bottom = 26
 
-## M2 容器格线绘制：容器边缘实线 + 内部格线虚线
+## M2 容器格线绘制：容器边缘实线 + 内部格线虚线（原点 = 左上角顶点）
 func _draw() -> void:
 	var sz := terrain_size
 	if sz.x <= 0 or sz.y <= 0:
 		return
 	var w := sz.x * 80.0
 	var h := sz.y * 100.0
-	var o := Vector2(-w * 0.5, -h * 0.5)
+	var o := Vector2.ZERO
 
 	# 内部格线（浅灰，隐约表现棋盘格）
 	var line := Color(1, 1, 1, 0.10)
@@ -363,12 +364,10 @@ func _origin_cell() -> Vector2i:
 	var rect := gm.get_footprint(self)
 	if rect.size != Vector2i.ZERO:
 		return rect.position
-	# 未登记（如测试瞬建）→ 按中心减半窗推算左上角格
-	var w := GridManager.CELL_W
-	var h := GridManager.CELL_H
+	# 未登记（如测试瞬建）：global_position = 左上角顶点 → 直接取整得到左上格
 	return Vector2i(
-		floori((global_position.x - terrain_size.x * 0.5 * w) / w),
-		floori((global_position.y - terrain_size.y * 0.5 * h) / h)
+		floori(global_position.x / GridManager.CELL_W),
+		floori(global_position.y / GridManager.CELL_H)
 	)
 
 ## M2：内容物在容器中的铺格位置（总纲 §3）

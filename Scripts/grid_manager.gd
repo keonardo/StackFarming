@@ -19,15 +19,30 @@ var _cell_owner: Dictionary = {}
 
 # ============================================================
 # 坐标换算
+# 语义（关键）：
+#   * cell_to_world  → 返回格的**左上角顶点**（格线交点）
+#   * cell_center    → 返回格的**中心**（单卡落位用）
+#   * 地形成容器 global_position = 覆盖区**左上角顶点**（面板从0,0向右下展开）
+#     —— 这样容器内部格子与全局棋盘格线完全重合
 # ============================================================
 func world_to_cell(pos: Vector2) -> Vector2i:
 	return Vector2i(roundi(pos.x / CELL_W), roundi(pos.y / CELL_H))
 
+## 格的左上角顶点（格线交点 —— 地形成容器锚点）
 func cell_to_world(cell: Vector2i) -> Vector2:
 	return Vector2(cell.x * CELL_W, cell.y * CELL_H)
 
-## 吸附到最近格点（返回格中心世界坐标）
+## 格的中心（普通单卡落位锚点）
+func cell_center(cell: Vector2i) -> Vector2:
+	return cell_to_world(cell) + Vector2(CELL_W * 0.5, CELL_H * 0.5)
+
+## 吸附到最近格的中心（普通卡落位）
 func snap_to_grid(pos: Vector2) -> Vector2:
+	var cell := world_to_cell(pos)
+	return cell_center(cell)
+
+## 吸附到最近格的左上角顶点（地形成容器落位）
+func snap_to_vertex(pos: Vector2) -> Vector2:
 	var cell := world_to_cell(pos)
 	return cell_to_world(cell)
 

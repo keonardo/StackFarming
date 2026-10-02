@@ -464,11 +464,15 @@ func _is_in_our_stack_chain(card: BaseCard) -> bool:
 	return false
 
 ## M0 网格吸附：自由放置时对齐最近格点（拖动释放调用）
+## 地形卡 → 吸附到顶点（左上角格线交点）；普通卡 → 吸附到格中心
 func _snap_to_grid() -> void:
 	var gm := get_node_or_null("/root/GridManager") as GridManager
 	if gm == null:
 		return
-	global_position = gm.snap_to_grid(global_position)
+	if role == CardEnums.CardRole.TERRAIN:
+		global_position = gm.snap_to_vertex(global_position)
+	else:
+		global_position = gm.snap_to_grid(global_position)
 
 ## M1 钩子：释放地形足迹（拖起时调用）
 func _release_grid_footprint_hook() -> void:
