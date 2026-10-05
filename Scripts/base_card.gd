@@ -526,9 +526,9 @@ func _queue_redraw_drag_preview() -> void:
 		var valid := gm.can_fit(origin, sz.x, sz.y)
 		dp.show_preview(origin, sz, valid)
 	else:
-		# 普通卡：吸附到最近格中心 → 单格
+		# 普通卡：落位 = 最近格中心 → 预览单格（用 center_cell 与 snap_to_grid 同源）
 		var center := gm.snap_to_grid(global_position)
-		var origin := gm.world_to_cell(center)
+		var origin := gm.center_cell(center)
 		dp.show_preview(origin, Vector2i(1, 1), true)
 
 # ============================================================

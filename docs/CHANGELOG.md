@@ -1,20 +1,25 @@
 # 📋 代码变更日志
 
-## v0.19.4 — 2026-09-27 拖拽落位棋盘格视觉提示
+## v0.19.4 — 2026-09-27 拖拽落位棋盘格视觉提示 + 格中心偏移修复
 
-**背景**：用户反馈拖动卡牌（含容器）时应有棋盘格预览，让玩家清楚落位目标。
+**背景**：用户反馈「拖拽时应有落位预览」；实现后反馈「卡牌（非地形）预览向右下角偏很多」。
 
 **新增** `Scripts/drag_preview.gd`（DragPreview autoload）：
 - 独立绘制层（z_index 1000，非交互），只显示拖拽落位提示框
-- 地形卡：半透明绿框（可放置）/ 红框（冲突）覆盖 w×h 格，多格时内部画格线，显示占几格
+- 地形卡：半透明绿框（可放置）/ 红框（冲突）覆盖 w×h 格，多格内部画格线
 - 普通卡：单格绿框提示落位格中心
 
 **接线** `base_card.gd` / `grid_manager.gd`：
-- `_input_event` 拖起 → `_show_drag_preview`；`_process` 每帧 → `_queue_redraw_drag_preview`（按角色推算目标格 + `can_fit` 冲突判定）；`_input` 松手 → `_hide_drag_preview`
-- `GridManager.can_fit(origin,w,h)` 公开冲突查询（供预览用）
+- `_input_event` 拖起 → 显示；`_process` 每帧刷新（按角色算目标格 + `can_fit` 冲突）；`_input` 松手 → 隐藏
 - `project.godot` 注册 DragPreview autoload
 
-**验证**：预览坐标推算正确 —— 腾出占地后 `can_fit=true`、重新占地后 `can_fit=false`（3/3 ✔）。编译+运行零错误。
+**修复：卡牌预览/落位向右下偏移**
+`world_to_cell` 用 `roundi(pos/格宽)`，当 pos 恰在格中心（如 360 → 360/80=4.5）会四舍五入到 5 → 跳右下一格。新增**格中心锚定语义**：
+- `snap_to_grid(pos)` = 最近格中心（`round((pos - 半格)/格宽)`，恰好中心时不跳）
+- `center_cell(pos)` = 最近格中心对应的格号（预览回溯同源）
+- 普通卡预览分支改用 `center_cell`，不再经 `world_to_cell`
+
+**验证**：格中心样本 snap 返回自身、center_cell 回溯原格（2/2 ✔）。编译+运行零错误。
 
 ---
 

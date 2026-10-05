@@ -37,9 +37,19 @@ func cell_center(cell: Vector2i) -> Vector2:
 	return cell_to_world(cell) + Vector2(CELL_W * 0.5, CELL_H * 0.5)
 
 ## 吸附到最近格的中心（普通卡落位）
+## 用「最近格中心」算法：格号 = round((pos - 半格)/格宽)，
+## 避免卡恰在格中心时 roundi(4.5)→5 跳到下一格
 func snap_to_grid(pos: Vector2) -> Vector2:
-	var cell := world_to_cell(pos)
-	return cell_center(cell)
+	var cx := roundi((pos.x - CELL_W * 0.5) / CELL_W)
+	var cy := roundi((pos.y - CELL_H * 0.5) / CELL_H)
+	return Vector2(cx * CELL_W + CELL_W * 0.5, cy * CELL_H + CELL_H * 0.5)
+
+## 最近格中心所对应的格号（与 snap_to_grid 一致，供预览回溯）
+func center_cell(pos: Vector2) -> Vector2i:
+	return Vector2i(
+		roundi((pos.x - CELL_W * 0.5) / CELL_W),
+		roundi((pos.y - CELL_H * 0.5) / CELL_H)
+	)
 
 ## 吸附到最近格的左上角顶点（地形成容器落位）
 func snap_to_vertex(pos: Vector2) -> Vector2:
