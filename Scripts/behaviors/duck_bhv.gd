@@ -58,14 +58,14 @@ func _lay_egg(_terrain: TerrainCard) -> void:
 	card.play_produce_animation()
 	var pos: Vector2 = card.global_position + Vector2(randf_range(-20, 20), randf_range(20, 40))
 	if CardSpawner.instance:
-		var egg: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.DUCK_EGG, "鸭蛋", pos)
-		if egg and is_instance_valid(card): egg.call_deferred("stack_on", card)
+		# M4 产蛋 → 浮动产物（待取），不直接挂载
+		CardSpawner.instance.spawn_floating(CardEnums.CardType.DUCK_EGG, "鸭蛋", pos)
 
 func _spawn_feces(terrain: TerrainCard) -> void:
 	var pos: Vector2 = card.global_position + Vector2(randf_range(-15, 15), randf_range(15, 30))
 	if CardSpawner.instance:
-		var feces: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.FECES, "粪便", pos)
-		if feces and is_instance_valid(card): feces.call_deferred("stack_on", card)
+		# M4 排粪 → 浮动产物（待取）
+		CardSpawner.instance.spawn_floating(CardEnums.CardType.FECES, "粪便", pos)
 
 func _check_eat_bug() -> void:
 	eat_cooldown -= 0.016
@@ -282,5 +282,6 @@ func _process_hatch(delta: float, terrain: TerrainCard) -> void:
 		hatching_egg.queue_free(); hatching_egg = null; hatch_timer = 0.0
 		if CardSpawner.instance:
 			var duck: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.DUCK, "鸭子", pos)
-			if duck and is_instance_valid(card): duck.call_deferred("stack_on", card)
+			# M4 例外：新动物不浮动，直接栖息到水域容器
+			if duck and is_instance_valid(card): duck.call_deferred("attach_to", terrain)
 		card.play_produce_animation()

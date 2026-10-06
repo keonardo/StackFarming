@@ -46,8 +46,8 @@ func _harvest(product_type: int, product_name: String) -> void:
 	card.progress = 0.0; card.play_produce_animation()
 	var pos: Vector2 = card.global_position + Vector2(randf_range(-20, 20), randf_range(20, 40))
 	if CardSpawner.instance:
-		var p: BaseCard = CardSpawner.instance.spawn_card(product_type, product_name, pos)
-		if p and is_instance_valid(card): p.call_deferred("stack_on", card)
+		# M4 收获 → 浮动产物（待取）
+		CardSpawner.instance.spawn_floating(product_type, product_name, pos)
 
 func _apply_bug_damage(delta: float, terrain: TerrainCard) -> void:
 	if not terrain: return

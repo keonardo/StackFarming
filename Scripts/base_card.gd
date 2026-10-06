@@ -121,6 +121,13 @@ var _water_overlay: ColorRect = null   # 水纹着色器 overlay（仅地貌卡�
 ## 自由移动标志：为 true 时跳过堆叠吸附，由移动 AI 控制位置
 var free_move: bool = false
 
+## 产物浮动标志：产物生成后以浮动卡存在，不落位/不占格，等玩家拖取
+var is_floating: bool = false
+## 浮动基线 Y（正弦浮动围绕此值）
+var _float_base_y: float = 0.0
+## 浮动相位（避免多张卡同步跳动）
+var _float_phase: float = 0.0
+
 ## 堆叠吸附目标位（stack_on 时解析；容器铺格/默认+35）
 var _child_target_pos: Vector2 = Vector2.ZERO
 
@@ -148,6 +155,9 @@ func _apply_font_recursive(node: Node) -> void:
 		_apply_font_recursive(node.get_child(i))
 
 func _initialize_starting_stack() -> void:
+	# 浮动产物不自动挂载 —— 等玩家主动拖取（M4）
+	if is_floating:
+		return
 	# 初始化落位 —— 明确三态分流（总纲 §4/§6）：
 	#   * 我是自由卡，附近有地形 → 看情况：地形×地形=合成入栈；非地形×地形=进容器
 	#   * 附近有普通卡 → 入栈
@@ -166,6 +176,11 @@ func _process(delta: float) -> void:
 		global_position = get_global_mouse_position() - _drag_offset
 		# 拖拽落位预览：每帧刷新目标格与合法性
 		_queue_redraw_drag_preview()
+	elif is_floating:
+		# 浮动卡（产物待取）：不上移动 AI、不推挤、不吸附，轻微上下浮动吸引注意
+		var t: float = Time.get_ticks_msec() * 0.001
+		global_position.y = _float_base_y + sin(t * 2.0 + _float_phase) * 3.0
+		z_index = 10
 	elif free_move:
 		# 移动 AI 控制位置，跳过吸附 lerp，但仍维护 z_index
 		z_index = container_parent.z_index + 1 if container_parent != null else (stack_parent.z_index + 1 if stack_parent != null else 0)
@@ -321,6 +336,8 @@ func _input_event(viewport: Viewport, event: InputEvent, shape_idx: int) -> void
 			# 记录拖动前位置（冲突回弹用）
 			_pre_drag_pos = global_position
 			z_index = 100
+			# 拖走浮动产物 → 拿起即变真实卡（不再是待取浮动）
+			is_floating = false
 			# 拖动即取出：脱离所有父子关系（容器内容物/栈子卡都还原为自由卡）
 			_detach_all_relations()
 			# 拖动中的地形卡退出水网（不供水/不参与邻接/翻塘/漂移）

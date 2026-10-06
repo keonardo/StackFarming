@@ -31,8 +31,8 @@ func process(delta: float) -> void:
 				if cnt < card.capacity:
 					var fpos: Vector2 = card.global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
 					if CardSpawner.instance:
-						var fish: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.FISH, "鱼", fpos)
-						if fish: fish.call_deferred("attach_to", card)
+						# M4 鱼塘产鱼 → 浮动产物（待取），不自动占容器格
+						CardSpawner.instance.spawn_floating(CardEnums.CardType.FISH, "鱼", fpos)
 	_tick_timers(delta)
 	if _has_crop(): _process_bugs(delta)
 
@@ -63,6 +63,7 @@ func _process_bugs(delta: float) -> void:
 		if card.count_children_of_type(CardEnums.CardType.BUG) < cap and randf() < chance:
 			var bpos: Vector2 = card.global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
 			if CardSpawner.instance:
+				# 虫是害兽非浮动产物
 				var bug: BaseCard = CardSpawner.instance.spawn_card(CardEnums.CardType.BUG, "虫", bpos)
 				if bug: bug.call_deferred("attach_to", card)
 

@@ -94,6 +94,16 @@ func spawn_card(ct: int, nm: String = "", pos: Vector2 = Vector2.ZERO) -> BaseCa
 		CardEnums.CardRole.TOOL:      return sp_k(ct, nm, pos)
 	return null
 
+## 产物浮动生成：产物以浮动卡出现，不落位/不占格/不参与容器判定，等玩家拖取
+func spawn_floating(ct: int, nm: String, pos: Vector2) -> BaseCard:
+	var c := spawn_card(ct, nm, pos)
+	if c == null:
+		return null
+	c.is_floating = true
+	c._float_base_y = pos.y
+	c._float_phase = randf() * TAU
+	return c
+
 func sp_c(ct: int, nm: String, pos: Vector2) -> BaseCard:
 	var c: BaseCard = _make(creature_scene, BaseCard.new())
 	var v := _get_vals(ct)

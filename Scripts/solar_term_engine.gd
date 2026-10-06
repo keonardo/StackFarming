@@ -138,8 +138,9 @@ func _trigger_jingzhe() -> void:
 
 		var bug_count := randi_range(jingzhe_bugs_per_field_min, jingzhe_bugs_per_field_max)
 		for _i in range(bug_count):
-			var bpos := terrain.global_position + Vector2(randf_range(-35, 35), randf_range(-35, 35))
 			if CardSpawner.instance:
+				# 虫非浮动产物（7.6 附着机制另行实现）→ 惊蛰直接刷到农田容器
+				var bpos := terrain.global_position + Vector2(randf_range(-35, 35), randf_range(-35, 35))
 				var bug := CardSpawner.instance.spawn_card(CardEnums.CardType.BUG, "虫", bpos)
 				if bug:
 					bug.call_deferred("attach_to", terrain)
