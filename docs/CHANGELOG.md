@@ -1,5 +1,22 @@
 # 📋 代码变更日志
 
+## v0.19.6 — 2026-10-08 动物 Avatar 双态系统 (M5)
+
+**背景**：设计文档「容器与种植规则 §7」——动物不是静态内容物，是**自由活物**。玩家不操作时显示 Avatar（小精灵，自由移动，不受容器/网格限制）；玩家操作时才变回 Card（完整卡牌）。
+
+**核心**：
+- **`CardEnums.is_animal_type(card_type)`**：区分「动物」（鸭子）vs「作物」（菰米/菱角同为 CREATURE role 但属静态内容物）
+- **`TerrainCard` 栖息地系统**：动物进容器 = **指派栖息地不占格**（`_habitat_animals` 与 `_slot_owner` 分离）；`can_accept_animal`/`assign_habitat`/`release_habitat`/`get_habitat_count`；鸭子类型上限独立（_habitat_caps）
+- **评审 query 兼容**：`get_contents()` 包含栖息动物 → 鸭子计数 `get_duck_count`/繁衍/背叛/`count_children_of_type` 无缝沿用
+- **`CreatureCard` 双态**：动物默认 Avatar 态（隐藏完整面板 → 圆形徽章 + 名称首字 + 头顶血条），拖起切 Card、松手切回 Avatar（`_on_drag_begin`/`_on_drag_end` 钩子）
+- **`enter/_leave_container` 动物分支**：动物走栖息地（不占格），静态内容物维持原占格
+
+**验证**：headless —— is_animal 判定 / 进容器不占格 / 栖息登记 / 鸭子计数含栖息 / 拖起切卡 / 松手切回 Avatar / 离开释放栖息（9/9 ✔）。
+
+**说明**：移动 AI 沿用既有的 `free_move`（鸭巡逻/追虫/归巢），Avatar 可自由游动、跨容器猎食；Vision 视觉因无精灵素材，先用「圆徽章+首字+血条」极简表现，后续可换 Sprite。
+
+---
+
 ## v0.19.5 — 2026-10-07 产物浮动系统 (M4 Floating Yield)
 
 **背景**：按设计文档「容器规则 §8 产物浮动」实现—— 产物生成后以浮动卡出现，不落位/不占格，等玩家主动拖取，落位永远由玩家决定。

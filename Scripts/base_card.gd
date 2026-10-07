@@ -346,6 +346,8 @@ func _input_event(viewport: Viewport, event: InputEvent, shape_idx: int) -> void
 			_release_grid_footprint_hook()
 			# 拖拽落位预览：显示目标棋盘格
 			_show_drag_preview()
+			# M5 钩子：玩家拿起卡（派生类可切换双态）
+			_on_drag_begin()
 			get_viewport().set_input_as_handled()
 
 func _input(event: InputEvent) -> void:
@@ -385,7 +387,17 @@ func _input(event: InputEvent) -> void:
 				_snap_to_grid()
 			# M1 地形卡落定后登记占地（冲突则就近空位）
 			_setup_grid_footprint_hook()
+			# M5 钩子：玩家松手（派生类可切回 Avatar 态）
+			_on_drag_end()
 			get_viewport().set_input_as_handled()
+
+## M5 钩子：玩家拿起卡（派生类覆写切换 Avatar/Card 双态）
+func _on_drag_begin() -> void:
+	pass
+
+## M5 钩子：玩家松手（派生类覆写切回 Avatar 态）
+func _on_drag_end() -> void:
+	pass
 
 # ============================================================
 # Drop target detection — Market & Labor (hook points)
@@ -597,6 +609,7 @@ func attach_to(target: BaseCard) -> bool:
 	return true
 
 ## 纯容器：进入地形成容器（铺格，不走单链）
+## 动物（M5）→ 指派栖息地（不占格）；其余 → 占格内容物
 ## 成功返回 true；被拒/满返回 false
 func enter_container(terrain: TerrainCard) -> bool:
 	if terrain == null or not is_instance_valid(terrain):
@@ -609,7 +622,19 @@ func enter_container(terrain: TerrainCard) -> bool:
 	# 离开旧容器
 	if container_parent != null:
 		_leave_container()
-	# 校验可进
+
+	# M5 动物 → 栖息地（不占格，类型上限判定）
+	var is_animal := role == CardEnums.CardRole.CREATURE and CardEnums.is_animal_type(type)
+	if is_animal:
+		if not terrain.can_accept_animal(self):
+			return false
+		if not terrain.assign_habitat(self):
+			return false
+		container_parent = terrain
+		terrain.notify_content_added(self)
+		return true
+
+	# 静态内容物 → 占格
 	if not terrain.can_accept_content(self):
 		return false
 	var pos := terrain.claim_content(self, global_position)
@@ -623,12 +648,16 @@ func enter_container(terrain: TerrainCard) -> bool:
 	_play_stack_animation(terrain)
 	return true
 
-## 统一出容器：释放格位 + 清归属 + 恢复全尺寸
+## 统一出容器：释放栖息/格位 + 清归属 + 恢复全尺寸
 func _leave_container() -> void:
 	if container_parent == null:
 		return
 	if is_instance_valid(container_parent):
-		container_parent.release_content(self)
+		# M5 动物走栖息地释放；静态内容物释放格位
+		if role == CardEnums.CardRole.CREATURE and CardEnums.is_animal_type(type):
+			container_parent.release_habitat(self)
+		else:
+			container_parent.release_content(self)
 	container_parent = null
 	_container_follow_offset = Vector2.ZERO
 	scale = Vector2.ONE

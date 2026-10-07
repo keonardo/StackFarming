@@ -20,6 +20,15 @@ var _slots: Dictionary = {}
 ## 反向映射：内容物卡 → 相对格 Vector2i
 var _slot_owner: Dictionary = {}
 
+# ── M5 栖息地系统 ──
+## 栖息动物：自由活物（Avatar），不占容器格，仅记录归属
+## 类型上限（如鸭 ≤2）独立于静态格容量
+var _habitat_animals: Array[BaseCard] = []
+## 每类动物的栖息上限（默认继承原承载力语义）
+var _habitat_caps: Dictionary = {
+	CardEnums.CardType.DUCK: 2,
+}
+
 var _bhv: TerrainBehavior = null
 
 func _ready() -> void:
@@ -248,7 +257,7 @@ func get_stack_chain() -> Array[BaseCard]:
 		sc = sc.stack_child
 	return chain
 
-## 返回所有容器内容物（含内容物的栈子链），不含 self
+## 返回所有容器内容物 + 栖息动物（含各自的栈子链），不含 self
 func get_contents() -> Array[BaseCard]:
 	var result: Array[BaseCard] = []
 	for card in _slot_owner.keys():
@@ -259,15 +268,23 @@ func get_contents() -> Array[BaseCard]:
 		while sub != null:
 			result.append(sub)
 			sub = sub.stack_child
+	# M5 栖息动物（Avatar）也计入查询，使鸭子计数/繁衍/背叛沿用
+	for animal in _habitat_animals:
+		if animal != null and is_instance_valid(animal):
+			result.append(animal)
 	return result
 
-## 地形合成/销毁时：内容物全部脱离（统一走 _detach_all_relations）
+## 地形合成/销毁时：内容物 + 栖息动物全部脱离（统一走 _detach_all_relations）
 func _drop_all_contents() -> void:
 	for card in _slot_owner.keys():
 		if card != null and is_instance_valid(card):
 			card._detach_all_relations()
+	for animal in _habitat_animals.duplicate():
+		if animal != null and is_instance_valid(animal):
+			animal._detach_all_relations()
 	_slots.clear()
 	_slot_owner.clear()
+	_habitat_animals.clear()
 
 ## 当前内容物数量
 func _content_count() -> int:
@@ -277,7 +294,7 @@ func _content_count() -> int:
 func max_content_count() -> int:
 	return terrain_size.x * terrain_size.y
 
-## 该卡是否允许进入本容器（M2 基础判定；类型上限/配方细分后议）
+## 该卡是否允许进入本容器（M2 基础判定；动物由栖息地另算，不占格）
 func can_accept_content(card: BaseCard) -> bool:
 	if card == null or not is_instance_valid(card):
 		return false
@@ -287,8 +304,50 @@ func can_accept_content(card: BaseCard) -> bool:
 	# 地形卡：只作「本体合成」，不作内容物
 	if card.role == CardEnums.CardRole.TERRAIN:
 		return false
+	# M5 动物走栖息地（不占格），不由格容量判定
+	if card.role == CardEnums.CardRole.CREATURE and CardEnums.is_animal_type(card.type):
+		return false
 	# 容量检查
 	return _content_count() < max_content_count()
+
+# ============================================================
+# M5 栖息地（动物 Avatar 不占格，仅记录归属 + 类型上限）
+# ============================================================
+## 此处地是否允许该动物栖息（按类型上限）
+func can_accept_animal(animal: BaseCard) -> bool:
+	if animal == null or not is_instance_valid(animal):
+		return false
+	if animal.role != CardEnums.CardRole.CREATURE or not CardEnums.is_animal_type(animal.type):
+		return false
+	# 已栖息不重复
+	if animal in _habitat_animals:
+		return true
+	var cap: int = _habitat_caps.get(animal.type, 0)
+	var current := 0
+	for a in _habitat_animals:
+		if is_instance_valid(a) and a.type == animal.type:
+			current += 1
+	return current < cap
+
+## 指派栖息地（动物进入容器）；成功返回 true
+func assign_habitat(animal: BaseCard) -> bool:
+	if not can_accept_animal(animal):
+		return false
+	if not (animal in _habitat_animals):
+		_habitat_animals.append(animal)
+	return true
+
+## 释放栖息地（动物离开/死亡）
+func release_habitat(animal: BaseCard) -> void:
+	_habitat_animals.erase(animal)
+
+## 当前某类动物的栖息数
+func get_habitat_count(card_type: int) -> int:
+	var n := 0
+	for a in _habitat_animals:
+		if is_instance_valid(a) and a.type == card_type:
+			n += 1
+	return n
 
 ## 为卡寻找最近空格并占位；返回占位格的世界中心坐标
 ## 返回 Vector2.INF 表示容器已满

@@ -62,6 +62,17 @@ static func role_from_type(card_type: CardType) -> CardRole:
 		return CardRole.RESOURCE
 
 # ============================================================
+# 是否为「动物」（自由活物，走 Avatar 双态）
+# 不同于作物（同为 CREATURE role 但属静态内容物，占容器格）
+# ============================================================
+static func is_animal_type(card_type: CardType) -> bool:
+	match card_type:
+		CardType.DUCK:
+			return true
+		_:
+			return false
+
+# ============================================================
 # 从 CardType 获取默认卡牌名称
 # ============================================================
 static func default_name(card_type: CardType) -> String:
