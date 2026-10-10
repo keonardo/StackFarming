@@ -128,6 +128,10 @@ var _float_base_y: float = 0.0
 ## 浮动相位（避免多张卡同步跳动）
 var _float_phase: float = 0.0
 
+## M5 面板可见性覆盖：Avatar 态由子类接管面板显隐，_update_visuals 尊重它
+## 默认 -1 不干预；0=强制隐藏；1=强制显示
+var panel_visibility_override: int = -1
+
 ## 堆叠吸附目标位（stack_on 时解析；容器铺格/默认+35）
 var _child_target_pos: Vector2 = Vector2.ZERO
 
@@ -264,8 +268,12 @@ func _update_visuals() -> void:
 
 	var panel: Control = get_node_or_null("Panel") as Control
 	if panel != null:
-		panel.visible = show_debug_info
-	if not show_debug_info:
+		# M5：Avatar 态强制隐藏面板（由子类设置 panel_visibility_override=0）
+		if panel_visibility_override >= 0:
+			panel.visible = panel_visibility_override == 1
+		else:
+			panel.visible = show_debug_info
+	if not show_debug_info and panel_visibility_override <= 0:
 		return
 
 	var val_a_label: Label = get_node_or_null("Panel/ValueALabel") as Label

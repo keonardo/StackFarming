@@ -84,9 +84,10 @@ func set_avatar_mode(avatar: bool) -> void:
 	is_avatar = avatar
 	if _avatar_node:
 		_avatar_node.visible = avatar
-	var panel := get_node_or_null("Panel") as Control
-	if panel:
-		panel.visible = not avatar
+	if avatar:
+		panel_visibility_override = 0   # 强制隐藏完整面板（_update_visuals 尊重）
+	else:
+		panel_visibility_override = 1   # 强制显示完整面板
 	if avatar:
 		scale = Vector2.ONE  # Avatar 使用原尺寸的小徽章（collision 缩小由场景处理）
 

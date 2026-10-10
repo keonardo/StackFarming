@@ -11,7 +11,9 @@
 - **`CreatureCard` 双态**：动物默认 Avatar 态（隐藏完整面板 → 圆形徽章 + 名称首字 + 头顶血条），拖起切 Card、松手切回 Avatar（`_on_drag_begin`/`_on_drag_end` 钩子）
 - **`enter/_leave_container` 动物分支**：动物走栖息地（不占格），静态内容物维持原占格
 
-**验证**：headless —— is_animal 判定 / 进容器不占格 / 栖息登记 / 鸭子计数含栖息 / 拖起切卡 / 松手切回 Avatar / 离开释放栖息（9/9 ✔）。
+**修复（面板未消失）**：`BaseCard._update_visuals()` 每帧强制 `panel.visible = show_debug_info`，覆盖了 Avatar 态的隐藏。新增 `panel_visibility_override`（-1 不干预 / 0 强制隐藏 / 1 强制显示），`_update_visuals` 尊重它，`set_avatar_mode` 用其接管面板显隐。
+
+**验证**：headless —— 动物进容器不占格 / 栖息登记 / 鸭子计数含栖息 / Avatar 面板隐藏且 `_update_visuals` 不覆盖 / 拖起卡面板可见 / 松手恢复隐藏（9/9 + 6/6 ✔）。
 
 **说明**：移动 AI 沿用既有的 `free_move`（鸭巡逻/追虫/归巢），Avatar 可自由游动、跨容器猎食；Vision 视觉因无精灵素材，先用「圆徽章+首字+血条」极简表现，后续可换 Sprite。
 
